@@ -13,8 +13,9 @@ import utils
 
 
 class Perceptron:
-    def __init__(self, n_classes, n_features):
+    def __init__(self, n_classes, n_features, eta=1):
         self.W = np.zeros((n_classes, n_features))
+        self.eta = eta
 
     def save(self, path):
         """
@@ -36,24 +37,32 @@ class Perceptron:
         x_i (n_features,): a single training example
         y_i (scalar): the gold label for that example
         """
-        # Todo: Q1 1(a)
-        pass
+        y_hat = np.argmax(self.W.dot(x_i))
+        if y_hat != y_i:
+            # Perceptron update
+            self.W[y_i, :] += self.eta * x_i
+            self.W[y_hat, :] -= self.eta * x_i
 
     def train_epoch(self, X, y):
         """
         X (n_examples, n_features): features for the whole dataset
         y (n_examples,): labels for the whole dataset
         """
-        # Todo: Q1 1(a)
-        pass
+        for x_i, y_i in zip(X, y):
+            self.update_weight(x_i, y_i)
+
 
     def predict(self, X):
         """
         X (n_examples, n_features)
         returns predicted labels y_hat, whose shape is (n_examples,)
         """
-        # Todo: Q1 1(a)
-        pass
+        predicted_labels = []
+        for x in X:
+            y_hat = np.argmax(self.W.dot(x))
+            predicted_labels.append(y_hat)
+        predicted_labels = np.array(predicted_labels)
+        return predicted_labels
 
     def evaluate(self, X, y):
         """
@@ -62,8 +71,9 @@ class Perceptron:
 
         returns classifier accuracy
         """
-        # Todo: Q1 1(a)
-        pass
+        y_hat = self.predict(X)
+        accuracy = np.mean(y_hat == y)
+        return accuracy
 
 
 def main(args):
@@ -77,7 +87,7 @@ def main(args):
     n_feats = X_train.shape[1]
 
     # initialize the model
-    model = Perceptron(n_classes, n_feats)
+    model = Perceptron(n_classes, n_feats, eta=1)
 
     epochs = np.arange(1, args.epochs + 1)
 
@@ -104,9 +114,11 @@ def main(args):
 
         print('train acc: {:.4f} | val acc: {:.4f}'.format(train_acc, valid_acc))
 
-        # Todo: Q1(a)
-        # Decide whether to save the model to args.save_path based on its
-        # validation score
+        # save the best model checkpoint
+        if valid_acc > best_valid:
+            best_valid = valid_acc
+            best_epoch = i
+            model.save(args.save_path)
 
     elapsed_time = time.time() - start
     minutes = int(elapsed_time // 60)
