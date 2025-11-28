@@ -15,7 +15,7 @@ import utils
 
 class FeedforwardNetwork(nn.Module):
     def __init__(
-            self, t, n_features, hidden_size, layers,
+            self, n_classes, n_features, hidden_size, layers,
             activation_type, dropout, **kwargs):
         """ Define a vanilla multiple-layer FFN with `layers` hidden layers 
         Args:
@@ -28,7 +28,26 @@ class FeedforwardNetwork(nn.Module):
         """
         super().__init__()
         
-        raise NotImplementedError()
+        activations = {"tanh": nn.Tanh(), "relu": nn.ReLU()} # TO CHECK
+        activation = activations[activation_type]
+
+        dropout = nn.Dropout(dropout)
+
+        layer_input_dims = [n_features] + [hidden_size] * layers
+        layer_output_dims = [hidden_size] * layers + [n_classes]
+
+        hidden_layers = []
+        for input_dim, output_dim in zip(layer_input_dims[:-1], layer_output_dims[:-1]):
+            block = nn.Sequential(
+                nn.Linear(input_dim, output_dim),
+                activation,
+                dropout
+            )
+            hidden_layers.append(block)
+
+        all_layers = hidden_layers + [nn.Linear(layer_input_dims[-1], layer_output_dims[-1])]
+
+        self.feedforward = nn.Sequential(*all_layers)
 
     def forward(self, x, **kwargs):
         """ Compute a forward pass through the FFN
@@ -37,7 +56,7 @@ class FeedforwardNetwork(nn.Module):
         Returns:
             scores (torch.Tensor)
         """
-        raise NotImplementedError()
+        return self.feedforward(x)
     
     
 def train_batch(X, y, model, optimizer, criterion, **kwargs):
@@ -51,7 +70,12 @@ def train_batch(X, y, model, optimizer, criterion, **kwargs):
     Returns:
         loss (float)
     """
-    raise NotImplementedError()
+    optimizer.zero_grad()
+    outputs = model(X, **kwargs)
+    loss = criterion(outputs, y)
+    loss.backward()
+    optimizer.step()
+    return loss.item()
 
 
 def predict(model, X):
@@ -62,7 +86,9 @@ def predict(model, X):
     Returns:
         preds: (n_examples)
     """
-    raise NotImplementedError()
+    scores = model(X)  # (n_examples x n_classes)
+    preds = scores.argmax(dim=-1)
+    return preds
 
 
 @torch.no_grad()
