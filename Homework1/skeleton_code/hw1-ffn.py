@@ -28,7 +28,7 @@ class FeedforwardNetwork(nn.Module):
         """
         super().__init__()
         
-        activations = {"tanh": nn.Tanh(), "relu": nn.ReLU()} # TO CHECK
+        activations = {"tanh": nn.Tanh(), "relu": nn.ReLU()}
         activation = activations[activation_type]
 
         dropout = nn.Dropout(dropout)
@@ -71,8 +71,8 @@ def train_batch(X, y, model, optimizer, criterion, **kwargs):
         loss (float)
     """
     optimizer.zero_grad()
-    outputs = model(X, **kwargs)
-    loss = criterion(outputs, y)
+    logits = model(X, **kwargs)
+    loss = criterion(logits, y)
     loss.backward()
     optimizer.step()
     return loss.item()
@@ -86,8 +86,8 @@ def predict(model, X):
     Returns:
         preds: (n_examples)
     """
-    scores = model(X)  # (n_examples x n_classes)
-    preds = scores.argmax(dim=-1)
+    logits = model(X)
+    preds = logits.argmax(dim=-1)
     return preds
 
 
@@ -102,7 +102,14 @@ def evaluate(model, X, y, criterion):
     Returns:
         loss, accuracy (Tuple[float, float])
     """
-    raise NotImplementedError()
+    model.eval()
+    logits = model(X)
+    loss = criterion(logits, y)
+    loss = loss.item()
+    preds = logits.argmax(dim=-1)
+    accuracy = (y == preds).float().mean().item()
+    model.train()
+    return loss, accuracy
 
 
 def plot(epochs, plottables, filename=None, ylim=None):
@@ -123,6 +130,8 @@ def plot(epochs, plottables, filename=None, ylim=None):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('-model', default='FeedforwardNet', type=str,
+                        help="Model name used in plots.")
     parser.add_argument('-epochs', default=30, type=int,
                         help="""Number of epochs to train for. You should not
                         need to change this value for your plots.""")
@@ -146,7 +155,7 @@ def main():
     dataset = utils.ClassificationDataset(data)
     train_dataloader = DataLoader(
         dataset, batch_size=opt.batch_size, shuffle=True, generator=torch.Generator().manual_seed(42))
-    train_X, train_y = dataset.train_X, dataset.train_y
+    train_X, train_y = dataset.X, dataset.y
     dev_X, dev_y = dataset.dev_X, dataset.dev_y
     test_X, test_y = dataset.test_X, dataset.test_y
 
@@ -187,12 +196,13 @@ def main():
     start = time.time()
 
     model.eval()
-    initial_train_loss, initial_train_acc = evaluate(model, train_X, train_y, criterion)
+    # TO ASK
+    # initial_train_loss, initial_train_acc = evaluate(model, train_X, train_y, criterion)
     initial_val_loss, initial_val_acc = evaluate(model, dev_X, dev_y, criterion)
-    train_losses.append(initial_train_loss)
-    train_accs.append(initial_train_acc)
-    valid_losses.append(initial_val_loss)
-    valid_accs.append(initial_val_acc)
+    # train_losses.append(initial_train_loss)
+    # train_accs.append(initial_train_acc)
+    # valid_losses.append(initial_val_loss)
+    # valid_accs.append(initial_val_acc)
     print('initial val acc: {:.4f}'.format(initial_val_acc))
 
     for ii in epochs:
