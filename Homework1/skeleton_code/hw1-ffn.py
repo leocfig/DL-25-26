@@ -11,7 +11,8 @@ from matplotlib import pyplot as plt
 
 import time
 import utils
-
+import json
+import os
 
 class FeedforwardNetwork(nn.Module):
     def __init__(
@@ -111,6 +112,114 @@ def evaluate(model, X, y, criterion):
     model.train()
     return loss, accuracy
 
+def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, dev_y, test_X, test_y, epochs=30, activation="relu", optimizer="sgd"):
+    results = []
+    widths = [16, 32, 64, 128, 256]
+    # ESCOLHI ESTES VALORES MAS PODEMOS MUDAR
+    learning_rates = [0.1, 0.01, 0.005, 0.001]
+    dropouts = [0.0, 0.2]
+    weight_decays = [0.0, 1e-4]
+
+    best_model_overall = None
+    best_val_acc_overall = 0
+    best_history_overall = None
+
+    criterion = nn.CrossEntropyLoss()
+
+    print("Performing grid search...\n")
+    os.makedirs("ffn_grid_search_results", exist_ok=True) # directory to save results to
+
+    for width in widths:
+        best_config_width = None
+        best_val_acc_width = 0
+        for lr in learning_rates:
+            for dp in dropouts:
+                for wd in weight_decays:
+                    print(f"Running config: width={width}, lr={lr}, dropout={dp}, wd={wd}")
+                    model = FeedforwardNetwork(n_classes, n_feats, width, 1, activation, dp)
+                    optimizer_cls = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}[optimizer]
+                    optimizer_inst = optimizer_cls(
+                        model.parameters(),
+                        lr=lr,
+                        weight_decay=wd
+                    )
+                    # Saving metrics per configuration
+                    best_val_acc_conf = 0
+                    train_losses_conf = []
+                    train_accs_conf = []
+                    valid_losses_conf = []
+                    valid_accs_conf = []
+
+                    for epoch in range(epochs):
+                        epoch_train_losses = []
+                        model.train()
+                        for X_batch, y_batch in train_dataloader:
+                            loss = train_batch(X_batch, y_batch, model, optimizer_inst, criterion)
+                            epoch_train_losses.append(loss)
+
+                        model.eval()
+                        epoch_train_loss = torch.tensor(epoch_train_losses).mean().item()
+                        _, train_acc = evaluate(model, train_X, train_y, criterion)
+                        val_loss, val_acc = evaluate(model, dev_X, dev_y, criterion)
+                        best_val_acc_conf = max(best_val_acc_conf, val_acc)
+
+                        train_losses_conf.append(epoch_train_loss)
+                        train_accs_conf.append(train_acc)
+                        valid_losses_conf.append(val_loss)
+                        valid_accs_conf.append(val_acc)
+
+                    config = { 
+                        "width": width,
+                        "lr": lr,
+                        "dropout": dp,
+                        "weight_decay": wd,
+                        "val_acc": best_val_acc_conf
+                    }
+
+                    if best_val_acc_conf > best_val_acc_overall:
+                        best_val_acc_overall = best_val_acc_conf
+                        best_model_overall = model
+                        best_history_overall = {
+                            "train_losses": train_losses_conf.copy(),
+                            "train_accs": train_accs_conf.copy(),
+                            "valid_losses": valid_losses_conf.copy(),
+                            "valid_accs": valid_accs_conf.copy(),
+                            "config": config
+                        }
+                    
+                    if best_val_acc_width < best_val_acc_conf:
+                        best_val_acc_width = best_val_acc_conf
+                        best_config_width = config
+
+                    results.append(config)
+                    print(f" → best val acc = {best_val_acc_conf:.4f}")
+
+        print(f"\n→ Best config for width {width}: {best_config_width}\n")
+
+        # Save JSON per width with the best model configuration
+        width_save_path = f"ffn_grid_search_results/best_config_width_{width}.json"
+        with open(width_save_path, "w") as f:
+            json.dump(best_config_width, f, indent=4)
+
+    print("\n=================== GRID SEARCH RESULTS ===================")
+    for r in results:
+        print(r)
+    print("============================================================\n")
+
+    # Evaluate on test set the best model configuration
+    _, test_acc = evaluate(best_model_overall, test_X, test_y, criterion)
+    print(f"Test accuracy of best model: {test_acc:.4f}")
+
+    # Plot training loss and validation accuracy
+    epochs_range = list(range(1, epochs+1))
+    plot(epochs_range, {
+        "Train Loss": best_history_overall["train_losses"]
+    }, filename="ffn_grid_search_results/ffn_best_train_loss.pdf")
+
+    plot(epochs_range, {
+        "Valid Accuracy": best_history_overall["valid_accs"]
+    }, filename="ffn_grid_search_results/ffn_best_val_acc.pdf")
+    
 
 def plot(epochs, plottables, filename=None, ylim=None):
     """Plot the plottables over the epochs.
@@ -147,6 +256,8 @@ def main():
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('-data_path', type=str, default='emnist-letters.npz',)
+    parser.add_argument('-grid_search', action='store_true',
+                    help="Run hyperparameter grid search instead of single run.")
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
@@ -164,6 +275,17 @@ def main():
 
     print(f"N features: {n_feats}")
     print(f"N classes: {n_classes}")
+
+    if opt.grid_search:
+        grid_search(
+            n_classes, n_feats,
+            train_dataloader, train_X, train_y,
+            dev_X, dev_y, test_X, test_y,
+            epochs=30,
+            activation="relu",
+            optimizer="sgd"
+        )
+        return 
 
     # initialize the model
     model = FeedforwardNetwork(

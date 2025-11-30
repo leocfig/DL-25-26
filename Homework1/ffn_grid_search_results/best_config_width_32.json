@@ -1,0 +1,7 @@
+{
+    "width": 32,
+    "lr": 0.1,
+    "dropout": 0.0,
+    "weight_decay": 0.0,
+    "val_acc": 0.8460577130317688
+}
