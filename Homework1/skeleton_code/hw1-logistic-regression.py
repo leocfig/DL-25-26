@@ -98,7 +98,7 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
     cell_size = img_size // cells_per_dim  # e.g. 7x7 cells
     X_hog = np.zeros((n_examples, cells_per_dim * cells_per_dim * num_bins))
 
-    # Bin edges for orientations in degrees
+    # Bin edges for orientations in degrees (signed gradients)
     bin_edges = np.linspace(-180, 180, num_bins + 1)
 
     start = time.time()
@@ -111,8 +111,8 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
         gx = np.zeros_like(img)
         gy = np.zeros_like(img)
 
-        gx[:, :-1] = img[:, 1:] - img[:, :-1]   # horizontal gradient
-        gy[:-1, :] = img[1:, :] - img[:-1, :]   # vertical gradient
+        gx[:, :-1] = img[:, 1:] - img[:, :-1]   # horizontal gradient (kernel [ -1, +1 ])
+        gy[:-1, :] = img[1:, :] - img[:-1, :]   # vertical gradient   (kernel [ -1, +1 ]^T)
 
         magnitude = np.sqrt(gx**2 + gy**2)
         orientation = np.degrees(np.arctan2(gy, gx))  # angles in degrees
@@ -123,7 +123,7 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
         for i in range(cells_per_dim):
             for j in range(cells_per_dim):
                 cell_mag = magnitude[
-                    i*cell_size:(i+1)*cell_size,
+                    i*cell_size:(i+1)*cell_size,   # Get the block of pixels in this cell
                     j*cell_size:(j+1)*cell_size
                 ]
                 cell_ori = orientation[
@@ -138,7 +138,7 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
                     density=False
                 )
 
-                hog_features.extend(hist)
+                hog_features.extend(hist)   # Concatenate histograms in a single feature vector
 
         X_hog[idx] = np.array(hog_features)
 
