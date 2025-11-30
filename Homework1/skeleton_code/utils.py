@@ -51,6 +51,7 @@ def load_dataset(data_path, bias=False):
 
 # curve_dict, key is label, value is (x, y)
 def plot(x_label, y_label, curves, filename=None):
+    plt.figure()
     plt.xlabel(x_label)
     plt.ylabel(y_label)
 
@@ -61,6 +62,7 @@ def plot(x_label, y_label, curves, filename=None):
     if filename is not None:
         plt.savefig(filename, bbox_inches='tight')
     plt.clf()
+    plt.close()
 
 
 class ClassificationDataset(torch.utils.data.Dataset):

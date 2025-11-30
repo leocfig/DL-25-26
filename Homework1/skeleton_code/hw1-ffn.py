@@ -129,6 +129,8 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
     print("Performing grid search...\n")
     os.makedirs("ffn_grid_search_results", exist_ok=True) # directory to save results to
 
+    train_acc_width = []
+
     for width in widths:
         best_config_width = None
         best_val_acc_width = 0
@@ -190,6 +192,8 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
                     if best_val_acc_width < best_val_acc_conf:
                         best_val_acc_width = best_val_acc_conf
                         best_config_width = config
+                        train_acc_for_best_val = train_accs_conf[valid_accs_conf.index(best_val_acc_conf)]
+                        train_acc_width.append(train_acc_for_best_val)
 
                     results.append(config)
                     print(f" → best val acc = {best_val_acc_conf:.4f}")
@@ -219,6 +223,13 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
     plot(epochs_range, {
         "Valid Accuracy": best_history_overall["valid_accs"]
     }, filename="ffn_grid_search_results/ffn_best_val_acc.pdf")
+
+    utils.plot(
+        "Hidden Layer Width",
+        "Training Accuracy",
+        {"Train Accuracy": (widths, train_acc_width)},
+        filename="ffn_grid_search_results/ffn_train_acc_vs_width.pdf"
+    )
     
 
 def plot(epochs, plottables, filename=None, ylim=None):
@@ -257,7 +268,7 @@ def main():
                         choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('-data_path', type=str, default='emnist-letters.npz',)
     parser.add_argument('-grid_search', action='store_true',
-                    help="Run hyperparameter grid search instead of single run.")
+                        help="Run hyperparameter grid search instead of single run.")
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
