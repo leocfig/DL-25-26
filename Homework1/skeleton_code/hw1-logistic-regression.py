@@ -6,11 +6,7 @@ import argparse
 import time
 import pickle
 import json
-import itertools        # trocar por zip?
-from copy import deepcopy
-
 import numpy as np
-
 import utils
 
 
@@ -83,22 +79,23 @@ class LogisticRegression:
         accuracy = np.mean(y_hat == labels)
         return accuracy
 
+
+## Question 1.2 (b) and (c)
 def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_step=5000):
     """
     Compute simplified HOG features for a dataset of flattened images.
     HOG -> Histograms of Oriented Gradients
 
     Parameters:
-        X: numpy array of shape (n_examples, 784)
-        img_size: width/height of the original square image (28x28 for EMNIST)
-        cells_per_dim: number of cells along each dimension
-        num_bins: number of orientation histogram bins
-
+        X (n_examples, n_features): original observations
+        img_size (int): width/height of the original square image
+        cells_per_dim (int): number of cells along each dimension
+        num_bins (int): number of orientation histogram bins
     Returns:
-        X_hog: numpy array of shape (n_examples, cells_per_dim*cells_per_dim*num_bins)
+        X_hog (n_examples, cells_per_dim*cells_per_dim*num_bins): observations in the new feature representation
     """
     n_examples = X.shape[0]
-    cell_size = img_size // cells_per_dim  # e.g., 4 pixels
+    cell_size = img_size // cells_per_dim  # e.g. 7x7 cells
     X_hog = np.zeros((n_examples, cells_per_dim * cells_per_dim * num_bins))
 
     # Bin edges for orientations in degrees
@@ -158,46 +155,36 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
     print(f'[HOG] Done. Final feature matrix shape: {X_hog.shape}')
     return X_hog
 
+## Question 1.2 (c)
 def grid_search_logistic(y_train, y_valid, y_test,
                          feature_names, features_dict,
                          learning_rates, regularizations,
-                         epochs=20, save_path="grid-search.pkl"):
+                         epochs, save_path):
     """
     Perform grid search over learning rates, L2 penalties, and feature representations.
 
-    Parameters
-    ----------
-    X_train, y_train, X_valid, y_valid, X_test, y_test : arrays
-        Training, validation, and test data.
-    feature_names : list of str
-        Names of the feature representations, e.g., ["raw", "hog"]
-    features_dict : dict
-        Maps feature name to the corresponding data tuple: (X_train, X_valid, X_test)
-    learning_rates : list of float
-        Candidate learning rates.
-    regularizations : list of float
-        Candidate L2 penalty values.
-    epochs : int
-        Number of epochs to train each configuration.
-    save_path : str
-        Temporary path to save checkpoints.
-
-    Returns
-    -------
-    results : dict
-        Nested dictionary with validation accuracies for each configuration,
-        and best test accuracy.
+    Parameters:
+        y_train, y_valid, y_test (n_examples,): arrays of target values for training, validation, and test data
+        feature_names (list of str): Names of the feature representations
+        features_dict (dict): Maps feature name to the corresponding data tuple: (X_train, X_valid, X_test)
+        learning_rates (list of float): Candidate learning rates
+        regularizations (list of float): Candidate L2 penalty values
+        epochs (int): Number of epochs to train each configuration
+        save_path (str): Temporary path to save checkpoints
+    Returns:
+        results (dict): Nested dictionary with validation accuracies for each configuration,
+                        best test accuracy, and other info.
     """
 
     results = {}
     best_valid = -1
+    best_feat = None
     best_config = None
-    best_model = None
     epochs = np.arange(1, args.epochs + 1)
 
     for feat_name in feature_names:
         X_tr, X_val, X_te = features_dict[feat_name]
-        for lr, reg in itertools.product(learning_rates, regularizations):
+        for lr, reg in zip(learning_rates, regularizations):
             config_name = f"{feat_name}_lr{lr}_reg{reg}"
             print(f"\n[GRID] Training configuration: {config_name}")
 
@@ -234,10 +221,6 @@ def grid_search_logistic(y_train, y_valid, y_test,
                 if val_acc > best_val_acc:
                     best_val_acc = val_acc
                     best_epoch = epoch
-                    model.save(save_path)
-
-                if epoch % 5 == 0 or epoch == args.epochs:
-                    print(f"Epoch {epoch}: train_acc={train_acc:.4f}, val_acc={val_acc:.4f}")
 
             elapsed_time = time.time() - start
             results[config_name] = {
@@ -250,21 +233,22 @@ def grid_search_logistic(y_train, y_valid, y_test,
             if best_val_acc > best_valid:
                 best_valid = best_val_acc
                 best_config = config_name
-                best_X_test = X_te
+                best_feat = feat_name
+                model.save(save_path)
 
-    print("Reloading best checkpoint")
+    print("\nReloading best checkpoint")
     best_model = LogisticRegression.load(save_path)
 
     # Evaluate best model on test set
-    test_acc = best_model.evaluate(best_X_test, y_test)
+    X_test = features_dict[best_feat][2]
+    test_acc = best_model.evaluate(X_test, y_test)
     results["best_config"] = best_config
     results["best_test_acc"] = float(test_acc)
 
     print(f"\n[GRID] Best configuration: {best_config}, Test accuracy: {test_acc:.4f}")
     return results
 
-## 2(b) 2(c)
-
+## 1.2 (c)
 # def main(args):
 #     utils.configure_seed(seed=args.seed)
 
@@ -285,14 +269,15 @@ def grid_search_logistic(y_train, y_valid, y_test,
 #     X_valid_hog = np.hstack([X_valid_hog, np.ones((X_valid_hog.shape[0], 1))])
 #     X_test_hog  = np.hstack([X_test_hog, np.ones((X_test_hog.shape[0], 1))])
 
-
 #     features_dict = {
 #         "hog": (X_train_hog, X_valid_hog, X_test_hog),
 #         "raw": (X_train_raw, X_valid_raw, X_test_raw)
 #     }
 
-#     learning_rates = [0.0001, 0.001, 0.01]
-#     regularizations = [0.00001, 0.0001]
+#     # learning_rates = [0.0001, 0.001, 0.01]
+#     learning_rates = [0.0001]
+#     # regularizations = [0.00001, 0.0001]
+#     regularizations = [0.00001]
 #     feature_names = ["hog", "raw"]
 
 #     grid_results = grid_search_logistic(
@@ -301,7 +286,7 @@ def grid_search_logistic(y_train, y_valid, y_test,
 #         features_dict=features_dict,
 #         learning_rates=learning_rates,
 #         regularizations=regularizations,
-#         epochs=20,
+#         epochs=3,
 #         save_path=args.save_path
 #     )
 
@@ -311,12 +296,12 @@ def grid_search_logistic(y_train, y_valid, y_test,
 
 # if __name__ == '__main__':
 #     parser = argparse.ArgumentParser()
-#     parser.add_argument('--epochs', default=20, type=int,
+#     parser.add_argument('--epochs', default=3, type=int,
 #                         help="""Number of epochs to train for.""")
 #     parser.add_argument('--data-path', type=str, default="emnist-letters.npz")
 #     parser.add_argument("--seed", type=int, default=42)
 #     parser.add_argument("--save-path", required=True)
-#     parser.add_argument("--scores", default="grid_search_results.json")
+#     parser.add_argument("--scores", default="Q1-grid-search-results.json")
 #     args = parser.parse_args()
 #     main(args)
 
