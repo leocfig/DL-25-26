@@ -3,6 +3,7 @@
 # Deep Learning Homework 1
 
 import argparse
+import itertools
 import time
 import pickle
 import json
@@ -80,7 +81,6 @@ class LogisticRegression:
         return accuracy
 
 
-## Question 1.2 (b) and (c)
 def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_step=5000):
     """
     Compute simplified HOG features for a dataset of flattened images.
@@ -155,7 +155,6 @@ def compute_hog_features(X, img_size=28, cells_per_dim=4, num_bins=9, progress_s
     print(f'[HOG] Done. Final feature matrix shape: {X_hog.shape}')
     return X_hog
 
-## Question 1.2 (c)
 def grid_search_logistic(y_train, y_valid, y_test,
                          feature_names, features_dict,
                          learning_rates, regularizations,
@@ -184,7 +183,7 @@ def grid_search_logistic(y_train, y_valid, y_test,
 
     for feat_name in feature_names:
         X_tr, X_val, X_te = features_dict[feat_name]
-        for lr, reg in zip(learning_rates, regularizations):
+        for lr, reg in itertools.product(learning_rates, regularizations):
             config_name = f"{feat_name}_lr{lr}_reg{reg}"
             print(f"\n[GRID] Training configuration: {config_name}")
 
@@ -248,70 +247,22 @@ def grid_search_logistic(y_train, y_valid, y_test,
     print(f"\n[GRID] Best configuration: {best_config}, Test accuracy: {test_acc:.4f}")
     return results
 
-## 1.2 (c)
-# def main(args):
-#     utils.configure_seed(seed=args.seed)
+def load_data(args, mode):
+    """
+    Loads dataset with bias handling depending on the mode.
+    """
+    add_bias = (mode == "single")  # only single model expects bias=True
+    data = utils.load_dataset(data_path=args.data_path, bias=add_bias)
+    return data
 
-#     data = utils.load_dataset(data_path=args.data_path, bias=False)
-#     X_train, y_train = data["train"]
-#     X_valid, y_valid = data["dev"]
-#     X_test, y_test = data["test"]
-
-#     X_train_hog = compute_hog_features(X_train)
-#     X_valid_hog = compute_hog_features(X_valid)
-#     X_test_hog = compute_hog_features(X_test)
-
-#     # Add bias term
-#     X_train_raw = np.hstack([X_train, np.ones((X_train.shape[0], 1))])
-#     X_valid_raw = np.hstack([X_valid, np.ones((X_valid.shape[0], 1))])
-#     X_test_raw  = np.hstack([X_test, np.ones((X_test.shape[0], 1))])
-#     X_train_hog = np.hstack([X_train_hog, np.ones((X_train_hog.shape[0], 1))])
-#     X_valid_hog = np.hstack([X_valid_hog, np.ones((X_valid_hog.shape[0], 1))])
-#     X_test_hog  = np.hstack([X_test_hog, np.ones((X_test_hog.shape[0], 1))])
-
-#     features_dict = {
-#         "hog": (X_train_hog, X_valid_hog, X_test_hog),
-#         "raw": (X_train_raw, X_valid_raw, X_test_raw)
-#     }
-
-#     # learning_rates = [0.0001, 0.001, 0.01]
-#     learning_rates = [0.0001]
-#     # regularizations = [0.00001, 0.0001]
-#     regularizations = [0.00001]
-#     feature_names = ["hog", "raw"]
-
-#     grid_results = grid_search_logistic(
-#         y_train=y_train, y_valid=y_valid, y_test=y_test,
-#         feature_names=feature_names,
-#         features_dict=features_dict,
-#         learning_rates=learning_rates,
-#         regularizations=regularizations,
-#         epochs=3,
-#         save_path=args.save_path
-#     )
-
-#     # Save results
-#     with open(args.scores, "w") as f:
-#         json.dump(grid_results, f, indent=4)
-
-# if __name__ == '__main__':
-#     parser = argparse.ArgumentParser()
-#     parser.add_argument('--epochs', default=3, type=int,
-#                         help="""Number of epochs to train for.""")
-#     parser.add_argument('--data-path', type=str, default="emnist-letters.npz")
-#     parser.add_argument("--seed", type=int, default=42)
-#     parser.add_argument("--save-path", required=True)
-#     parser.add_argument("--scores", default="Q1-grid-search-results.json")
-#     args = parser.parse_args()
-#     main(args)
-
-def main(args):
-    utils.configure_seed(seed=args.seed)
-
-    data = utils.load_dataset(data_path=args.data_path, bias=True)
+def run_single_experiment(args, data):
+    """
+    Implements Q1.2(a): train a single logistic regression model.
+    """
     X_train, y_train = data["train"]
     X_valid, y_valid = data["dev"]
     X_test, y_test = data["test"]
+
     n_classes = np.unique(y_train).size
     n_feats = X_train.shape[1]
 
@@ -324,16 +275,14 @@ def main(args):
     )
 
     epochs = np.arange(1, args.epochs + 1)
-
-    valid_accs = []
-    train_accs = []
+    train_accs, valid_accs = [], []
+    best_valid = 0.0
+    best_epoch = -1
 
     start = time.time()
 
-    best_valid = 0.0
-    best_epoch = -1
-    for i in epochs:
-        print('Training epoch {}'.format(i))
+    for epoch in epochs:
+        print('Training epoch {}'.format(epoch))
         train_order = np.random.permutation(X_train.shape[0])
         X_train = X_train[train_order]
         y_train = y_train[train_order]
@@ -351,7 +300,7 @@ def main(args):
         # save the best model checkpoint
         if valid_acc > best_valid:
             best_valid = valid_acc
-            best_epoch = i
+            best_epoch = epoch
             model.save(args.save_path)
 
     elapsed_time = time.time() - start
@@ -377,13 +326,68 @@ def main(args):
              "selected_epoch": int(best_epoch),
              "test": float(test_acc),
              "time": elapsed_time},
-            f,
-            indent=4
+            f, indent=4
         )
 
+def run_grid_search_experiment(args, data):
+    """
+    Implements Q1.2(c): HOG features + grid search.
+    """
+    X_train, y_train = data["train"]
+    X_valid, y_valid = data["dev"]
+    X_test, y_test = data["test"]
+
+    X_train_hog = compute_hog_features(X_train)
+    X_valid_hog = compute_hog_features(X_valid)
+    X_test_hog = compute_hog_features(X_test)
+
+    # Add bias term
+    X_train_raw = np.hstack([X_train, np.ones((X_train.shape[0], 1))])
+    X_valid_raw = np.hstack([X_valid, np.ones((X_valid.shape[0], 1))])
+    X_test_raw  = np.hstack([X_test, np.ones((X_test.shape[0], 1))])
+    X_train_hog = np.hstack([X_train_hog, np.ones((X_train_hog.shape[0], 1))])
+    X_valid_hog = np.hstack([X_valid_hog, np.ones((X_valid_hog.shape[0], 1))])
+    X_test_hog  = np.hstack([X_test_hog, np.ones((X_test_hog.shape[0], 1))])
+
+    features_dict = {
+        "hog": (X_train_hog, X_valid_hog, X_test_hog),
+        "raw": (X_train_raw, X_valid_raw, X_test_raw)
+    }
+
+    learning_rates = [0.0001, 0.001, 0.01]
+    regularizations = [0.00001, 0.0001]
+    feature_names = ["hog", "raw"]
+
+    results = grid_search_logistic(
+        y_train=y_train, y_valid=y_valid, y_test=y_test,
+        feature_names=feature_names,
+        features_dict=features_dict,
+        learning_rates=learning_rates,
+        regularizations=regularizations,
+        epochs=args.epochs,
+        save_path=args.save_path
+    )
+
+    # Save results
+    with open(args.scores, "w") as f:
+        json.dump(results, f, indent=4)
+
+
+def main(args):
+    utils.configure_seed(seed=args.seed)
+    data = load_data(args, mode=args.mode)
+
+    if args.mode == "single":
+        run_single_experiment(args, data)
+    elif args.mode == "grid":
+        run_grid_search_experiment(args, data)
+    else:
+        raise ValueError(f"Unknown mode: {args.mode}")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('--mode', choices=['single', 'grid'], required=True,
+                        help="Choose experiment: 'single' for 1.2(a), 'grid' for 1.2(c)")
     parser.add_argument('--epochs', default=20, type=int,
                         help="""Number of epochs to train for.""")
     parser.add_argument('--data-path', type=str, default="emnist-letters.npz")
