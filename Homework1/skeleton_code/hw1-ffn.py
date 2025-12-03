@@ -250,8 +250,6 @@ def plot(epochs, plottables, filename=None, ylim=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('-model', default='FeedforwardNet', type=str,
-                        help="Model name used in plots.")
     parser.add_argument('-epochs', default=30, type=int,
                         help="""Number of epochs to train for. You should not
                         need to change this value for your plots.""")
@@ -329,16 +327,15 @@ def main():
     start = time.time()
 
     model.eval()
-    # TO ASK
-    # initial_train_loss, initial_train_acc = evaluate(model, train_X, train_y, criterion)
+    initial_train_loss, initial_train_acc = evaluate(model, train_X, train_y, criterion)
     initial_val_loss, initial_val_acc = evaluate(model, dev_X, dev_y, criterion)
-    # train_losses.append(initial_train_loss)
-    # train_accs.append(initial_train_acc)
-    # valid_losses.append(initial_val_loss)
-    # valid_accs.append(initial_val_acc)
+    train_losses.append(initial_train_loss)
+    train_accs.append(initial_train_acc)
+    valid_losses.append(initial_val_loss)
+    valid_accs.append(initial_val_acc)
     print('initial val acc: {:.4f}'.format(initial_val_acc))
 
-    for ii in epochs:
+    for ii in epochs[1:]:
         print('Training epoch {}'.format(ii))
         epoch_train_losses = []
         model.train()
@@ -352,8 +349,8 @@ def main():
         _, train_acc = evaluate(model, train_X, train_y, criterion)
         val_loss, val_acc = evaluate(model, dev_X, dev_y, criterion)
 
-        print('train loss: {:.4f} | val loss: {:.4f} | val acc: {:.4f}'.format(
-            epoch_train_loss, val_loss, val_acc
+        print('train loss: {:.4f}| train_acc: {:.4f} | val loss: {:.4f} | val acc: {:.4f}'.format(
+            epoch_train_loss, train_acc, val_loss, val_acc
         ))
 
         train_losses.append(epoch_train_loss)
@@ -381,11 +378,15 @@ def main():
         "Valid Loss": valid_losses,
     }
 
-    plot(epochs, losses, filename=f'{opt.model}-training-loss-{config}.pdf')
+    accs = {
+        "Train Accuracy": train_accs,
+        "Valid Accuracy": valid_accs
+    }
+
+    plot(epochs, losses, filename=f'losses-{config}.pdf')
+    plot(epochs, accs, filename=f'accs-{config}.pdf')
     print(f"Final Training Accuracy: {train_accs[-1]:.4f}")
     print(f"Best Validation Accuracy: {max(valid_accs):.4f}")
-    val_accuracy = { "Valid Accuracy": valid_accs }
-    plot(epochs, val_accuracy, filename=f'{opt.model}-validation-accuracy-{config}.pdf')
 
 
 if __name__ == '__main__':
