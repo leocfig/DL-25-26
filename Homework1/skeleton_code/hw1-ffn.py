@@ -112,13 +112,10 @@ def evaluate(model, X, y, criterion):
     model.train()
     return loss, accuracy
 
-def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, dev_y, test_X, test_y, epochs=30, activation="relu", optimizer="sgd"):
+def grid_search(n_classes, n_feats, widths, learning_rates, dropouts, weight_decays,
+                train_dataloader, train_X, train_y, dev_X, dev_y, test_X, test_y,
+                epochs=30, activation="relu", optimizer="sgd"):
     results = []
-    widths = [16, 32, 64, 128, 256]
-    # ESCOLHI ESTES VALORES MAS PODEMOS MUDAR
-    learning_rates = [0.1, 0.01, 0.005, 0.001]
-    dropouts = [0.0, 0.2]
-    weight_decays = [0.0, 1e-4]
 
     best_model_overall = None
     best_val_acc_overall = 0
@@ -134,6 +131,7 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
     for width in widths:
         best_config_width = None
         best_val_acc_width = 0
+        best_train_acc_for_width = 0
         for lr in learning_rates:
             for dp in dropouts:
                 for wd in weight_decays:
@@ -152,6 +150,7 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
                     valid_losses_conf = []
                     valid_accs_conf = []
 
+                    config_start_time = time.time()
                     for epoch in range(epochs):
                         epoch_train_losses = []
                         model.train()
@@ -170,12 +169,14 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
                         valid_losses_conf.append(val_loss)
                         valid_accs_conf.append(val_acc)
 
+                    config_runtime = time.time() - config_start_time
                     config = { 
                         "width": width,
                         "lr": lr,
                         "dropout": dp,
                         "weight_decay": wd,
-                        "val_acc": best_val_acc_conf
+                        "val_acc": best_val_acc_conf,
+                        "runtime": config_runtime
                     }
 
                     if best_val_acc_conf > best_val_acc_overall:
@@ -193,11 +194,12 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
                         best_val_acc_width = best_val_acc_conf
                         best_config_width = config
                         train_acc_for_best_val = train_accs_conf[valid_accs_conf.index(best_val_acc_conf)]
-                        train_acc_width.append(train_acc_for_best_val)
+                        best_train_acc_for_width = train_acc_for_best_val
 
                     results.append(config)
                     print(f" → best val acc = {best_val_acc_conf:.4f}")
 
+        train_acc_width.append(best_train_acc_for_width)
         print(f"\n→ Best config for width {width}: {best_config_width}\n")
 
         # Save JSON per width with the best model configuration
@@ -209,6 +211,11 @@ def grid_search(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, d
     for r in results:
         print(r)
     print("============================================================\n")
+    # save results to a file
+    output_path = "ffn_grid_search_results/grid_search_results.txt"
+    with open(output_path, "w") as f:
+        for r in results:
+            f.write(str(r) + "\n")
 
     # Evaluate on test set the best model configuration
     _, test_acc = evaluate(best_model_overall, test_X, test_y, criterion)
@@ -286,8 +293,13 @@ def main():
     print(f"N classes: {n_classes}")
 
     if opt.grid_search:
+        widths = [16, 32, 64, 128, 256]
+        # ESCOLHI ESTES VALORES MAS PODEMOS MUDAR
+        learning_rates = [0.1, 0.01, 0.005, 0.001]
+        dropouts = [0.0, 0.2]
+        weight_decays = [0.0, 1e-4]
         grid_search(
-            n_classes, n_feats,
+            n_classes, n_feats, widths, learning_rates, dropouts, weight_decays,
             train_dataloader, train_X, train_y,
             dev_X, dev_y, test_X, test_y,
             epochs=30,
