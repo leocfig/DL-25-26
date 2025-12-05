@@ -28,27 +28,32 @@ class FeedforwardNetwork(nn.Module):
             dropout (float): dropout probability
         """
         super().__init__()
-        
-        activations = {"tanh": nn.Tanh(), "relu": nn.ReLU()}
-        activation = activations[activation_type]
 
         dropout = nn.Dropout(dropout)
+        
+        activations = {
+            "relu": nn.ReLU(),
+            "tanh": nn.Tanh(),
+        }
 
-        layer_input_dims = [n_features] + [hidden_size] * layers
-        layer_output_dims = [hidden_size] * layers + [n_classes]
+        if activation_type.lower() not in activations:
+            raise ValueError(f"Activation '{activation_type}' is not supported.")
+        
+        activation = activations[activation_type.lower()]
 
-        hidden_layers = []
-        for input_dim, output_dim in zip(layer_input_dims[:-1], layer_output_dims[:-1]):
-            block = nn.Sequential(
-                nn.Linear(input_dim, output_dim),
-                activation,
-                dropout
-            )
-            hidden_layers.append(block)
+        modules = []
 
-        all_layers = hidden_layers + [nn.Linear(layer_input_dims[-1], layer_output_dims[-1])]
+        # First layer: input -> hidden
+        modules += [nn.Linear(n_features, hidden_size), activation, dropout]
 
-        self.feedforward = nn.Sequential(*all_layers)
+        # Hidden layers: hidden -> hidden
+        for _ in range(layers - 1):
+            modules += [nn.Linear(hidden_size, hidden_size), activation, dropout]
+
+        # Output layer
+        modules.append(nn.Linear(hidden_size, n_classes))
+
+        self.network = nn.Sequential(*modules)
 
     def forward(self, x, **kwargs):
         """ Compute a forward pass through the FFN
@@ -57,7 +62,7 @@ class FeedforwardNetwork(nn.Module):
         Returns:
             scores (torch.Tensor)
         """
-        return self.feedforward(x)
+        return self.network(x)
     
     
 def train_batch(X, y, model, optimizer, criterion, **kwargs):
@@ -71,11 +76,21 @@ def train_batch(X, y, model, optimizer, criterion, **kwargs):
     Returns:
         loss (float)
     """
+    # Zero the gradients from the previous step
     optimizer.zero_grad()
+
+    # Forward pass
     logits = model(X, **kwargs)
+
+    # Compute the loss between predicted outputs and true labels
     loss = criterion(logits, y)
+
+    # Backpropagate the loss: compute gradients
     loss.backward()
+
+    # Update model parameters using the computed gradients
     optimizer.step()
+
     return loss.item()
 
 
@@ -87,7 +102,11 @@ def predict(model, X):
     Returns:
         preds: (n_examples)
     """
+
+    # Forward pass: compute raw outputs (logits) from the model
     logits = model(X)
+
+    # Select the class with the highest predicted score
     preds = logits.argmax(dim=-1)
     return preds
 
@@ -103,13 +122,25 @@ def evaluate(model, X, y, criterion):
     Returns:
         loss, accuracy (Tuple[float, float])
     """
+
+    # Set model to evaluation mode
     model.eval()
+
+    # Forward pass: compute raw outputs (logits) from the model
     logits = model(X)
+
+    # Compute the loss between predicted outputs and true labels
     loss = criterion(logits, y)
     loss = loss.item()
+
+    # Convert logits to predicted labels
     preds = logits.argmax(dim=-1)
+
     accuracy = (y == preds).float().mean().item()
+
+    # Restore the model to training mode after evaluation
     model.train()
+
     return loss, accuracy
 
 def grid_search(n_classes, n_feats, widths, learning_rates, dropouts, weight_decays,
@@ -412,7 +443,6 @@ def main():
 
     if opt.mode == "grid":
         widths = [16, 32, 64, 128, 256]
-        # ESCOLHI ESTES VALORES MAS PODEMOS MUDAR
         learning_rates = [0.1, 0.01, 0.005, 0.001]
         dropouts = [0.0, 0.2]
         weight_decays = [0.0, 1e-4]
