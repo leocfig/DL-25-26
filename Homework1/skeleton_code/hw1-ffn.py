@@ -237,7 +237,122 @@ def grid_search(n_classes, n_feats, widths, learning_rates, dropouts, weight_dec
         {"Train Accuracy": (widths, train_acc_width)},
         filename="ffn_grid_search_results/ffn_train_acc_vs_width.pdf"
     )
-    
+
+def depth_experiment(n_classes, n_feats, train_dataloader, train_X, train_y, dev_X, dev_y, test_X, test_y,
+                     epochs, depths, hidden_size, best_config, activation="relu", optimizer="sgd"):
+    results = {}
+
+    # Extract best hyperparameters from the stored config
+    lr = best_config["lr"]
+    dropout = best_config["dropout"]
+    weight_decay = best_config["weight_decay"]
+    criterion = nn.CrossEntropyLoss()
+
+    best_model_overall = None
+    best_val_acc_overall = 0
+    best_history_overall = None
+    final_train_accs = []
+
+    os.makedirs("ffn_depth_results", exist_ok=True) # directory to save results to
+    print("\n[DEPTH EXPERIMENT] Starting depth sweep...")
+    print(f"Using best hyperparameters from width=32: {best_config}\n")
+
+    for L in depths:
+        print(f"\n[DEPTH EXPERIMENT] Training model with L={L} layers")
+
+        model = FeedforwardNetwork(
+            n_classes=n_classes,
+            n_features=n_feats,
+            hidden_size=hidden_size,
+            layers=L,
+            activation_type=activation,
+            dropout=dropout
+        )
+
+        optimizer_cls = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}[optimizer]
+        optimizer_inst = optimizer_cls(
+            model.parameters(),
+            lr=lr,
+            weight_decay=weight_decay
+        )
+
+        best_val_acc = -1
+        train_losses = []
+        val_accs = []
+
+        for epoch in range(epochs):
+            epoch_train_losses = []
+            model.train()
+            for X_batch, y_batch in train_dataloader:
+                loss = train_batch(X_batch, y_batch, model, optimizer_inst, criterion)
+                epoch_train_losses.append(loss)
+
+            model.eval()
+            epoch_train_loss = torch.tensor(epoch_train_losses).mean().item()
+            _, train_acc = evaluate(model, train_X, train_y, criterion)
+            val_loss, val_acc = evaluate(model, dev_X, dev_y, criterion)
+
+            # Save training losses and validation accuracies for plotting
+            train_losses.append(epoch_train_loss)
+            val_accs.append(val_acc)
+
+            if val_acc > best_val_acc:
+                best_val_acc = val_acc
+
+            print(f'[L={L}] Epoch {epoch+1}/{epochs} | train loss: {epoch_train_loss:.4f} | \
+train_acc: {train_acc:.4f} | val loss: {val_loss:.4f} | val acc: {val_acc:.4f}')
+
+        results[L] = best_val_acc
+        final_train_accs.append(train_acc)
+        if best_val_acc > best_val_acc_overall:
+            best_val_acc_overall = best_val_acc
+            best_model_overall = model
+            best_history_overall = {
+                "train_losses": train_losses.copy(),
+                "valid_accs": val_accs.copy()
+            }
+
+    # Build results table
+    lines = []
+    lines.append("-------------------------------------")
+    lines.append(" Depth | Best Validation Accuracy")
+    lines.append("-------------------------------------")
+    for L in depths:
+        lines.append(f"   {L:<4} | {results[L]:.4f}")
+    lines.append("-------------------------------------")
+    table_text = "\n".join(lines)
+
+    # Print to console
+    print("\n[DEPTH EXPERIMENT] Summary:")
+    print(table_text)
+
+    # Save to file
+    output_path = "ffn_depth_results/depth_val_results.txt"
+    with open(output_path, "w") as f:
+        f.write(table_text + "\n")
+
+
+    # Evaluate on test set the best model configuration
+    _, test_acc = evaluate(best_model_overall, test_X, test_y, criterion)
+    print(f"Test accuracy of best model: {test_acc:.4f}")
+
+    # Plot training loss and validation accuracy over epochs
+    epochs_range = list(range(1, epochs+1))
+    plot(epochs_range, {
+        "Train Loss": best_history_overall["train_losses"]
+    }, filename="ffn_depth_results/ffn_best_train_losses.pdf")
+
+    plot(epochs_range, {
+        "Validation Accuracy": best_history_overall["valid_accs"]
+    }, filename="ffn_depth_results/ffn_best_val_accs.pdf")
+
+    # Plot training accuracy as a function of depth
+    utils.plot(
+        "Network Depth",
+        "Training Accuracy",
+        {"Train Accuracy": (depths, final_train_accs)},
+        filename="ffn_depth_results/ffn_train_acc_vs_depth.pdf"
+    )
 
 def plot(epochs, plottables, filename=None, ylim=None):
     """Plot the plottables over the epochs.
@@ -272,8 +387,10 @@ def main():
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('-data_path', type=str, default='emnist-letters.npz',)
-    parser.add_argument('-grid_search', action='store_true',
-                        help="Run hyperparameter grid search instead of single run.")
+    # parser.add_argument('-grid_search', action='store_true',
+    #                     help="Run hyperparameter grid search instead of single run.")
+    parser.add_argument('-mode', choices=['single', 'grid', 'depth'], default='single',
+                        help="Choose experiment: 'single' for 2.1, 'grid' for 2.2, 'depth' for 2.3")
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
@@ -292,7 +409,8 @@ def main():
     print(f"N features: {n_feats}")
     print(f"N classes: {n_classes}")
 
-    if opt.grid_search:
+
+    if opt.mode == "grid":
         widths = [16, 32, 64, 128, 256]
         # ESCOLHI ESTES VALORES MAS PODEMOS MUDAR
         learning_rates = [0.1, 0.01, 0.005, 0.001]
@@ -306,7 +424,23 @@ def main():
             activation="relu",
             optimizer="sgd"
         )
-        return 
+        return
+    elif opt.mode == "depth":
+        depths = [1, 3, 5, 7, 9]
+        # Load best config from JSON file
+        with open("ffn_grid_search_results/best_config_width_32.json", "r") as f:
+            best_config = json.load(f)
+
+        depth_experiment(
+            n_classes, n_feats,
+            train_dataloader, train_X, train_y,
+            dev_X, dev_y, test_X, test_y,
+            epochs=30, depths=depths, hidden_size=32,
+            best_config=best_config,
+            activation="relu",
+            optimizer="sgd"
+        )
+        return
 
     # initialize the model
     model = FeedforwardNetwork(
