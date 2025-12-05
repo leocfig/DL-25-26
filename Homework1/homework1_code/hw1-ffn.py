@@ -418,8 +418,6 @@ def main():
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('-data_path', type=str, default='emnist-letters.npz',)
-    # parser.add_argument('-grid_search', action='store_true',
-    #                     help="Run hyperparameter grid search instead of single run.")
     parser.add_argument('-mode', choices=['single', 'grid', 'depth'], default='single',
                         help="Choose experiment: 'single' for 2.1, 'grid' for 2.2, 'depth' for 2.3")
     opt = parser.parse_args()
