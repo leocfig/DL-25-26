@@ -494,7 +494,7 @@ def main():
     criterion = nn.CrossEntropyLoss()
 
     # training loop
-    epochs = torch.arange(1, opt.epochs + 1)
+    epochs = torch.arange(0, opt.epochs + 1)
     train_losses = []
     train_accs = []
     valid_losses = []
