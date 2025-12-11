@@ -308,8 +308,8 @@ def depth_experiment(n_classes, n_feats, train_dataloader, train_X, train_y, dev
         )
 
         best_val_acc = -1
-        train_losses = []
-        val_accs = []
+        train_losses, val_losses = [], []
+        train_accs, val_accs = [], []
 
         for epoch in range(epochs):
             epoch_train_losses = []
@@ -323,8 +323,10 @@ def depth_experiment(n_classes, n_feats, train_dataloader, train_X, train_y, dev
             _, train_acc = evaluate(model, train_X, train_y, criterion)
             val_loss, val_acc = evaluate(model, dev_X, dev_y, criterion)
 
-            # Save training losses and validation accuracies for plotting
+            # Save training and validation losses and accuracies for plotting
             train_losses.append(epoch_train_loss)
+            train_accs.append(train_acc)
+            val_losses.append(val_loss)
             val_accs.append(val_acc)
 
             if val_acc > best_val_acc:
@@ -340,7 +342,9 @@ train_acc: {train_acc:.4f} | val loss: {val_loss:.4f} | val acc: {val_acc:.4f}')
             best_model_overall = model
             best_history_overall = {
                 "train_losses": train_losses.copy(),
-                "valid_accs": val_accs.copy()
+                "train_accs": train_accs.copy(),
+                "valid_losses": val_losses.copy(),
+                "valid_accs": val_accs.copy(),
             }
 
     # Build results table
@@ -370,12 +374,14 @@ train_acc: {train_acc:.4f} | val loss: {val_loss:.4f} | val acc: {val_acc:.4f}')
     # Plot training loss and validation accuracy over epochs
     epochs_range = list(range(1, epochs+1))
     plot(epochs_range, {
-        "Train Loss": best_history_overall["train_losses"]
-    }, filename="ffn_depth_results/ffn_best_train_losses.pdf")
+        "Train Loss": best_history_overall["train_losses"],
+        "Valid Loss": best_history_overall["valid_losses"]
+    }, filename="ffn_depth_results/ffn_best_losses.pdf")
 
     plot(epochs_range, {
+        "Train Accuracy": best_history_overall["train_accs"],
         "Validation Accuracy": best_history_overall["valid_accs"]
-    }, filename="ffn_depth_results/ffn_best_val_accs.pdf")
+    }, filename="ffn_depth_results/ffn_best_accs.pdf")
 
     # Plot training accuracy as a function of depth
     utils.plot(
@@ -418,8 +424,8 @@ def main():
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='sgd')
     parser.add_argument('-data_path', type=str, default='emnist-letters.npz',)
-    parser.add_argument('-mode', choices=['single', 'grid', 'depth'], default='single',
-                        help="Choose experiment: 'single' for 2.1, 'grid' for 2.2, 'depth' for 2.3")
+    parser.add_argument('-mode', choices=['single', 'width', 'depth'], default='single',
+                        help="Choose experiment: 'single' for 2.1, 'width' for 2.2, 'depth' for 2.3")
     opt = parser.parse_args()
 
     utils.configure_seed(seed=42)
