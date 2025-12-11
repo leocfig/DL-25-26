@@ -228,10 +228,10 @@ def grid_search(n_classes, n_feats, widths, learning_rates, dropouts, weight_dec
                         best_train_acc_for_width = train_acc_for_best_val
 
                     results.append(config)
-                    print(f" → best val acc = {best_val_acc_conf:.4f}")
+                    print(f"-> Best val acc = {best_val_acc_conf:.4f}")
 
         train_acc_width.append(best_train_acc_for_width)
-        print(f"\n→ Best config for width {width}: {best_config_width}\n")
+        print(f"\n-> Best config for width {width}: {best_config_width}\n")
 
         # Save JSON per width with the best model configuration
         width_save_path = f"ffn_grid_search_results/best_config_width_{width}.json"
