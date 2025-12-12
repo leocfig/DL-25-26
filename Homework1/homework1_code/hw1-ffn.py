@@ -255,12 +255,14 @@ def grid_search(n_classes, n_feats, widths, learning_rates, dropouts, weight_dec
     # Plot training loss and validation accuracy
     epochs_range = list(range(1, epochs+1))
     plot(epochs_range, {
-        "Train Loss": best_history_overall["train_losses"]
-    }, filename="ffn_grid_search_results/ffn_best_train_loss.pdf")
+        "Train Loss": best_history_overall["train_losses"],
+        "Valid Loss": best_history_overall["valid_losses"]
+    }, filename="ffn_grid_search_results/ffn_best_loss.pdf")
 
     plot(epochs_range, {
+        "Train Accuracy": best_history_overall["train_accs"],
         "Valid Accuracy": best_history_overall["valid_accs"]
-    }, filename="ffn_grid_search_results/ffn_best_val_acc.pdf")
+    }, filename="ffn_grid_search_results/ffn_best_acc.pdf")
 
     utils.plot(
         "Hidden Layer Width",
@@ -445,7 +447,7 @@ def main():
     print(f"N classes: {n_classes}")
 
 
-    if opt.mode == "grid":
+    if opt.mode == "width":
         widths = [16, 32, 64, 128, 256]
         learning_rates = [0.1, 0.01, 0.005, 0.001]
         dropouts = [0.0, 0.2]
