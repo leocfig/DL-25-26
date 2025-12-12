@@ -71,7 +71,14 @@ python3 homework1_code/hw1-multilayer-perceptron.py \
 All programming components of Question 2 are implemented in:  
 **File:** `homework1_code/hw1-ffn.py`  
 
-TODO: completar com cada alínea
+### 1. Implementation Warmup
+Implements the foundational FFN components required for the later experiments (`FeedforwardNetwork` class).
+
+### 2. Investigating Width in One-Layer FFNs
+Implemented in the `grid_search` function, which performs the full width sweep, executes the required hyperparameter grid search, evaluates all configurations, generates the tables and plots for parts (a), (b) and (c), and saves the best-performing models and results.
+
+### 3. Investigating Depth in FFNs
+Implemented in the `depth_experiment` function, which trains models across the specified depths using the best 32-unit configuration, records the validation and training metrics, and produces all depth-related tables, plots, and analyses required for parts (a)-(c).
 
 ## Question 3
 TODO: deixar nota a indicar em que ficheiro estão as demonstrações? ou não
