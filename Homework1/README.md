@@ -92,16 +92,16 @@ To execute the Implementation Warmup, run the feedforward network with the follo
 
 ```bash
 python3 homework1_code/hw1-ffn.py \
-  --epochs 30 \
-  --batch_size 64 \
-  --hidden_size 32 \
-  --layers 1 \
-  --learning_rate 0.001 \
-  --l2_decay 0.0 \
-  --dropout 0.0 \
-  --activation relu \
-  --optimizer sgd \
-  --data_path emnist-letters.npz
+  -epochs 30 \
+  -batch_size 64 \
+  -hidden_size 32 \
+  -layers 1 \
+  -learning_rate 0.001 \
+  -l2_decay 0.0 \
+  -dropout 0.0 \
+  -activation relu \
+  -optimizer sgd \
+  -data_path emnist-letters.npz
 ```
 
 ### 2. Investigating Width in One-Layer FFNs
@@ -110,7 +110,7 @@ Implemented in the `grid_search` function, which performs the full width sweep, 
 To perform the width investigation in one-layer FFNs, execute the following command:
 
 ```bash
-python3 homework1_code/hw1-ffn.py --mode width
+python3 homework1_code/hw1-ffn.py -mode width
 ```
 
 (The parameters used for this run correspond to the default values defined in the code.)
@@ -121,7 +121,7 @@ Implemented in the `depth_experiment` function, which trains models across the s
 To perform the depth investigation in FFNs, execute the following command:
 
 ```bash
-python3 homework1_code/hw1-ffn.py --mode depth
+python3 homework1_code/hw1-ffn.py -mode depth
 ```
 
 (The parameters used for this run correspond to the default values defined in the code.)
