@@ -565,8 +565,9 @@ def main():
         "Valid Accuracy": valid_accs
     }
 
-    plot(epochs, losses, filename=f'losses-{config}.pdf')
-    plot(epochs, accs, filename=f'accs-{config}.pdf')
+    os.makedirs("ffn_results", exist_ok=True) # directory to save results to
+    plot(epochs, losses, filename=f'ffn_results/losses-{config}.pdf')
+    plot(epochs, accs, filename=f'ffn_results/accs-{config}.pdf')
     print(f"Final Training Accuracy: {train_accs[-1]:.4f}")
     print(f"Best Validation Accuracy: {max(valid_accs):.4f}")
 

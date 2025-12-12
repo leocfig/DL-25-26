@@ -3,6 +3,7 @@
 # Deep Learning Homework 1
 
 import argparse
+import os
 import time
 import pickle
 import json
@@ -141,6 +142,13 @@ def main(args):
     n_classes = np.unique(y_train).size
     hidden_dim = 100
 
+    dir_name = "mlp_results"
+    os.makedirs(dir_name, exist_ok=True) # directory to save results to
+    model_path = os.path.join(dir_name, args.save_path)
+    acc_plot_path = os.path.join(dir_name, args.accuracy_plot)
+    loss_plot_path = os.path.join(dir_name, args.loss_plot)
+    scores_path = os.path.join(dir_name, args.scores)
+
     model = MultilayerPerceptron(n_features, n_classes, hidden_dim, eta=0.001)
     print('N features: {}'.format(n_features))
     print('N classes: {}'.format(n_classes))
@@ -179,7 +187,7 @@ def main(args):
         if valid_acc > best_valid:
             best_valid = valid_acc
             best_epoch = i
-            model.save(args.save_path)
+            model.save(model_path)
     
     elapsed_time = time.time() - start
     minutes = int(elapsed_time // 60)
@@ -187,22 +195,22 @@ def main(args):
     print('Training took {} minutes and {} seconds'.format(minutes, seconds))
 
     print("Reloading best checkpoint")
-    best_model = MultilayerPerceptron.load(args.save_path)
+    best_model = MultilayerPerceptron.load(model_path)
     test_acc = best_model.evaluate(X_test, y_test)
     print('Best model test acc: {:.4f}'.format(test_acc))
 
     utils.plot("Epoch", "Loss", {
         "train Loss": (epochs, train_losses)
-    }, filename=args.loss_plot)
+    }, filename=loss_plot_path)
 
     utils.plot(
         "Epoch", "Accuracy",
         {"train": (epochs, train_accs), "valid": (epochs, valid_accs)},
-        filename=args.accuracy_plot
+        filename=acc_plot_path
     )
 
     # Save scores json
-    with open(args.scores, "w") as f:
+    with open(scores_path, "w") as f:
         json.dump(
             {"best_valid": float(best_valid),
              "selected_epoch": int(best_epoch),
@@ -219,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument('--data-path', type=str, default="emnist-letters.npz")
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--save-path', required=True)
-    parser.add_argument('--accuracy-plot', default="Q1-mlp-training.pdf",
+    parser.add_argument('--accuracy-plot', default="Q1-mlp-accs.pdf",
                         help="File to save the combined training plot (loss + train/val accuracy).")
     parser.add_argument('--loss-plot', default="Q1-mlp-loss.pdf",
                         help="File to save the training loss.")

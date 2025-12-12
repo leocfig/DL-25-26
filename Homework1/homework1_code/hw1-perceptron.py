@@ -3,6 +3,7 @@
 # Deep Learning Homework 1
 
 import argparse
+import os
 import time
 import pickle
 import json
@@ -86,6 +87,12 @@ def main(args):
     n_classes = np.unique(y_train).size
     n_feats = X_train.shape[1]
 
+    dir_name = "perceptron_results"
+    os.makedirs(dir_name, exist_ok=True) # directory to save results to
+    model_path = os.path.join(dir_name, args.save_path)
+    plot_path = os.path.join(dir_name, args.accuracy_plot)
+    scores_path = os.path.join(dir_name, args.scores)
+
     # initialize the model
     model = Perceptron(n_classes, n_feats, eta=1)
 
@@ -118,7 +125,7 @@ def main(args):
         if valid_acc > best_valid:
             best_valid = valid_acc
             best_epoch = i
-            model.save(args.save_path)
+            model.save(model_path)
 
     elapsed_time = time.time() - start
     minutes = int(elapsed_time // 60)
@@ -126,7 +133,7 @@ def main(args):
     print('Training took {} minutes and {} seconds'.format(minutes, seconds))
 
     print("Reloading best checkpoint")
-    best_model = Perceptron.load(args.save_path)
+    best_model = Perceptron.load(model_path)
     test_acc = best_model.evaluate(X_test, y_test)
 
     print('Best model test acc: {:.4f}'.format(test_acc))
@@ -134,10 +141,10 @@ def main(args):
     utils.plot(
         "Epoch", "Accuracy",
         {"train": (epochs, train_accs), "valid": (epochs, valid_accs)},
-        filename=args.accuracy_plot
+        filename=plot_path
     )
 
-    with open(args.scores, "w") as f:
+    with open(scores_path, "w") as f:
         json.dump(
             {"best_valid": float(best_valid),
              "selected_epoch": int(best_epoch),

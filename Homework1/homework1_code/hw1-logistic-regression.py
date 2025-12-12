@@ -4,6 +4,7 @@
 
 import argparse
 import itertools
+import os
 import time
 import pickle
 import json
@@ -255,7 +256,7 @@ def load_data(args, mode):
     data = utils.load_dataset(data_path=args.data_path, bias=add_bias)
     return data
 
-def run_single_experiment(args, data):
+def run_single_experiment(args, data, model_path, plot_path, scores_path):
     """
     Implements Q1.2(a): train a single logistic regression model.
     """
@@ -301,7 +302,7 @@ def run_single_experiment(args, data):
         if valid_acc > best_valid:
             best_valid = valid_acc
             best_epoch = epoch
-            model.save(args.save_path)
+            model.save(model_path)
 
     elapsed_time = time.time() - start
     minutes = int(elapsed_time // 60)
@@ -309,7 +310,7 @@ def run_single_experiment(args, data):
     print('Training took {} minutes and {} seconds'.format(minutes, seconds))
 
     print("Reloading best checkpoint")
-    best_model = LogisticRegression.load(args.save_path)
+    best_model = LogisticRegression.load(model_path)
     test_acc = best_model.evaluate(X_test, y_test)
 
     print('Best model test acc: {:.4f}'.format(test_acc))
@@ -317,10 +318,10 @@ def run_single_experiment(args, data):
     utils.plot(
         "Epoch", "Accuracy",
         {"train": (epochs, train_accs), "valid": (epochs, valid_accs)},
-        filename=args.accuracy_plot
+        filename=plot_path
     )
 
-    with open(args.scores, "w") as f:
+    with open(scores_path, "w") as f:
         json.dump(
             {"best_valid": float(best_valid),
              "selected_epoch": int(best_epoch),
@@ -329,7 +330,7 @@ def run_single_experiment(args, data):
             f, indent=4
         )
 
-def run_grid_search_experiment(args, data):
+def run_grid_search_experiment(args, data, model_path, scores_path):
     """
     Implements Q1.2(c): HOG features + grid search.
     """
@@ -365,11 +366,11 @@ def run_grid_search_experiment(args, data):
         learning_rates=learning_rates,
         regularizations=regularizations,
         epochs=args.epochs,
-        save_path=args.save_path
+        save_path=model_path
     )
 
     # Save results
-    with open(args.scores, "w") as f:
+    with open(scores_path, "w") as f:
         json.dump(results, f, indent=4)
 
 
@@ -377,10 +378,16 @@ def main(args):
     utils.configure_seed(seed=args.seed)
     data = load_data(args, mode=args.mode)
 
+    dir_name = "logistic_regression_results"
+    os.makedirs(dir_name, exist_ok=True) # directory to save results to
+    model_path = os.path.join(dir_name, args.save_path)
+    plot_path = os.path.join(dir_name, args.accuracy_plot)
+    scores_path = os.path.join(dir_name, args.scores)
+
     if args.mode == "single":
-        run_single_experiment(args, data)
+        run_single_experiment(args, data, model_path, plot_path, scores_path)
     elif args.mode == "grid":
-        run_grid_search_experiment(args, data)
+        run_grid_search_experiment(args, data, model_path, scores_path)
     else:
         raise ValueError(f"Unknown mode: {args.mode}")
 
