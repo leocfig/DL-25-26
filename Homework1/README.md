@@ -127,4 +127,5 @@ python3 homework1_code/hw1-ffn.py -mode depth
 (The parameters used for this run correspond to the default values defined in the code.)
 
 ## Question 3
-TODO: deixar nota a indicar em que ficheiro estão as demonstrações? ou não
+This part of the assignment is theoretical.  
+The work for this question is included in the report `G04-Homework1`.
