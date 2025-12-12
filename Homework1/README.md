@@ -38,6 +38,8 @@ python3 homework1_code/hw1-perceptron.py \
 **File:** `homework1_code/hw1-logistic-regression.py`  
 Implements a logistic regression classifier, including training with stochastic gradient descent, evaluation, and experiments involving feature engineering (such as HOG features) and hyperparameter tuning.
 
+The feature representation step required for Part (b) is implemented in the function `compute_hog_features`, which is used to construct the HOG-based dataset before running the grid-search experiment in Part (c). Execution of the two experiment modes is handled in `run_single_experiment` (for Part (a)) and `run_grid_search_experiment` (for Part (c)), which are invoked by main depending on the `--mode` argument.
+
 For Part (a), the logistic regression model can be executed using the following command:
 
 ```bash
@@ -80,6 +82,8 @@ python3 homework1_code/hw1-multilayer-perceptron.py \
 ## Question 2 - Feedforward Neural Networks (FFNs)
 All programming components of Question 2 are implemented in:  
 **File:** `homework1_code/hw1-ffn.py`  
+
+The experiment to run is chosen depending on the `-mode` argument.
 
 ### 1. Implementation Warmup
 Implements the foundational FFN components required for the later experiments (`FeedforwardNetwork` class).
