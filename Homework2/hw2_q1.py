@@ -4,6 +4,8 @@
 #https://github.com/MedMNIST/MedMNIST
 
 
+import os
+# from Homework2.hw2_q2 import utils
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,43 +16,92 @@ from torchvision import transforms
 
 from medmnist import BloodMNIST, INFO
 
+import time
 import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score
 
+class CNN(nn.Module):
+    def __init__(self, n_classes, use_softmax=False):
+        super(CNN, self).__init__()
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+        # TODO: generalizar?
+        # Convolutional layers
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+
+        # Fully connected layers
+        self.fc1 = nn.Linear(128 * 28 * 28, 256)
+        self.fc2 = nn.Linear(256, n_classes)
+
+        self.activation = nn.ReLU()
+
+        # Optional Softmax
+        self.use_softmax = use_softmax
+        if use_softmax:
+            self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        # TODO: generalizar?
+        x = self.conv1(x)
+        x = self.activation(x)
+
+        x = self.conv2(x)
+        x = self.activation(x)
+
+        x = self.conv3(x)
+        x = self.activation(x)
+
+        # Flatten
+        x = x.view(x.size(0), -1)
+
+        x = self.fc1(x)
+        x = self.activation(x)
+
+        x = self.fc2(x)
+
+        if self.use_softmax:
+            x = self.softmax(x)
+
+        return x
 
 
-# Data Loading
-
-data_flag = 'bloodmnist'
-print(data_flag)
-info = INFO[data_flag]
-print(len(info['label']))
-n_classes = len(info['label'])
-
-# Transformations
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[.5], std=[.5])
-])
-
-import time
-
-# --------- Before Training ----------
-total_start = time.time()
-
-#Training Function
 
 def train_epoch(loader, model, criterion, optimizer):
-    
-    ### YOUR CODE HERE ###
+    """
+    Train one epoch, updating weights with the given batch.
+    Args:
+        X (torch.Tensor): (n_examples x n_features)
+        y (torch.Tensor): gold labels (n_examples)
+        model (nn.Module): a PyTorch defined model
+        criterion: loss function
+        optimizer: optimizer used in gradient step
+    Returns:
+        mean loss (float)
+    """
+    model.train()
+    total_loss = 0
+    for imgs, labels in loader:
+        imgs = imgs.to(device)
+        labels = labels.squeeze().long().to(device) # ??
+
+        # Zero the gradients from the previous step
+        optimizer.zero_grad()
+        # Forward pass
+        logits = model(imgs)
+        # Compute the loss between predicted outputs and true labels
+        loss = criterion(logits, labels)
+        # Backpropagate the loss: compute gradients
+        loss.backward()
+        # Update model parameters using the computed gradients
+        optimizer.step()
+
+        total_loss += loss.item()
 
     return total_loss / len(loader)
 
-#Evaluation Function
 
 def evaluate(loader, model):
     model.eval()
@@ -75,66 +126,116 @@ def plot(epochs, plottable, ylabel='', name=''):
     plt.plot(epochs, plottable)
     plt.savefig('%s.pdf' % (name), bbox_inches='tight')
 
-train_dataset = BloodMNIST(split='train', transform=transform, download=True, size=28)
-val_dataset   = BloodMNIST(split='val',   transform=transform, download=True, size=28)
-test_dataset  = BloodMNIST(split='test',  transform=transform, download=True, size=28)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# initialize the model
-# get an optimizer
-# get a loss criterion
+# Data Loading
+data_flag = 'bloodmnist'
+print(data_flag)
+info = INFO[data_flag]
+print(len(info['label']))
+n_classes = len(info['label'])
 
-### YOUR CODE HERE ###
+# Transformations
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[.5], std=[.5])
+])
 
-# training loop
-### you can use the code below or implement your own loop ###
-train_losses = []
-val_accs = []
-test_accs = []
-for epoch in range(epochs):
+# --------- Before Training ----------
+total_start = time.time()
 
-    epoch_start = time.time()
+def main(opt):
+    # utils.configure_seed(seed=42) # fazemos isto na msm apesar de o utils estar na q2?
 
-    train_loss = train_epoch(train_loader, model, criterion, optimizer)
-    val_acc = evaluate(val_loader, model)
-    print(f"Epoch {epoch+1}/{epochs} | Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f}")
+    train_dataset = BloodMNIST(split='train', transform=transform, download=True, size=28)
+    val_dataset   = BloodMNIST(split='val',   transform=transform, download=True, size=28)
+    test_dataset  = BloodMNIST(split='test',  transform=transform, download=True, size=28)
 
-    train_losses.append(train_loss)
-    val_accs.append(val_acc)
+    train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=True)
+    val_loader   = DataLoader(val_dataset, batch_size=opt.batch_size, shuffle=False)
+    test_loader  = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False)
 
-    epoch_end = time.time()
-    epoch_time = epoch_end - epoch_start
+    # initialize the model
+    # get an optimizer
+    # get a loss criterion
 
-    print(f"Epoch {epoch+1}/{epochs} | "
-          f"Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | "
-          f"Time: {epoch_time:.2f} sec")
+    model = CNN(
+        n_classes=n_classes,
+        use_softmax=not opt.no_softmax
+    ).to(device)
 
-#Test Accuracy
-test_acc = evaluate(test_loader, model)
-print("Test Accuracy:", test_acc)
-test_accs.append(test_acc)
+    # get an optimizer
+    optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
 
+    optim_cls = optims[opt.optimizer]
+    optimizer = optim_cls(
+        model.parameters(), lr=opt.learning_rate, weight_decay=0
+    )
 
-#Save the model
-#torch.save(model.state_dict(), "bloodmnist_cnn.pth")
-#print("Model saved as bloodmnist_cnn.pth")
+    # get a loss criterion
+    criterion = nn.CrossEntropyLoss()
 
+    # training loop
+    ### you can use the code below or implement your own loop ###
+    epochs = np.arange(1, opt.epochs + 1)
+    train_losses = []
+    val_accs = []
+    test_accs = []
+    for ii in epochs:
+        epoch_start = time.time()
 
-# --------- After Training ----------
-total_end = time.time()
-total_time = total_end - total_start
+        train_loss = train_epoch(train_loader, model, criterion, optimizer)
+        val_acc = evaluate(val_loader, model)
+        # print(f"Epoch {epoch+1}/{epochs} | Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f}")
 
-print(f"\nTotal training time: {total_time/60:.2f} minutes "
-      f"({total_time:.2f} seconds)")
+        train_losses.append(train_loss)
+        val_accs.append(val_acc)
 
-#print('Final Test acc: %.4f' % (evaluate(model, test_X, test_y)))
+        epoch_end = time.time()
+        epoch_time = epoch_end - epoch_start
 
-#config = "{}-{}-{}-{}-{}".format(opt.learning_rate, opt.optimizer, opt.no_maxpool, opt.no_softmax,)
-config = "{}".format(str(0.1))
+        print(f"Epoch {ii}/{opt.epochs} | "
+            f"Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | "
+            f"Time: {epoch_time:.2f} sec")
 
-plot(epochs, train_losses, ylabel='Loss', name='CNN-training-loss-{}'.format(config))
-plot(epochs, val_accs, ylabel='Accuracy', name='CNN-validation-accuracy-{}'.format(config))
-plot(epochs, test_accs, ylabel='Accuracy', name='CNN-test-accuracy-{}'.format(config))
+        # Test Accuracy
+        test_acc = evaluate(test_loader, model)
+        print("Test Accuracy:", test_acc)
+        test_accs.append(test_acc)
+
+    # Save the model
+    torch.save(model.state_dict(), "bloodmnist_cnn.pth")
+    print("Model saved as bloodmnist_cnn.pth")
+
+    # --------- After Training ----------
+    total_end = time.time()
+    total_time = total_end - total_start
+
+    print(f"\nTotal training time: {total_time/60:.2f} minutes "
+        f"({total_time:.2f} seconds)")
+    print('Final Test acc: %.4f' % (evaluate(test_loader, model)))
+
+    config = f"{opt.learning_rate}-{opt.optimizer}-{opt.no_maxpool}-{opt.no_softmax}"
+
+    os.makedirs("Q1-CNN-results", exist_ok=True) # directory to save results to
+    plot(epochs, train_losses, ylabel='Loss', name='Q1-CNN-results/CNN-training-loss-{}'.format(config))
+    plot(epochs, val_accs, ylabel='Accuracy', name='Q1-CNN-results/CNN-validation-accuracy-{}'.format(config))
+    plot(epochs, test_accs, ylabel='Accuracy', name='Q1-CNN-results/CNN-test-accuracy-{}'.format(config))
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-epochs', default=200, type=int,
+                        help="""Number of epochs to train for. You should not
+                        need to change this value for your plots.""")
+    parser.add_argument('-batch_size', default=64, type=int,
+                        help="Size of training batch.")
+    parser.add_argument('-learning_rate', type=float, default=0.001,
+                        help="""Learning rate for updates.""")
+    parser.add_argument('-optimizer',
+                        choices=['sgd', 'adam'], default='adam')
+    parser.add_argument('-no_maxpool', action='store_true')
+    parser.add_argument('-no_softmax', action='store_true')
+
+    opt = parser.parse_args()
+    main(opt)
