@@ -208,8 +208,6 @@ def main(opt):
 
         train_loss = train_epoch(train_loader, model, criterion, optimizer)
         val_acc = evaluate(val_loader, model)
-        # print(f"Epoch {epoch+1}/{epochs} | Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f}")
-
         train_losses.append(train_loss)
         val_accs.append(val_acc)
 
