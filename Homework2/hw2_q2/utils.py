@@ -10,7 +10,7 @@ from torch.utils.data import TensorDataset, DataLoader
 from typing import List, Tuple
 
 try:
-    from config import RNAConfig
+    from .config import RNAConfig
 except ImportError as e:
     print(f"Error importing config: {e}")
     sys.exit(1)

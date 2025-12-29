@@ -5,7 +5,7 @@
 
 
 import os
-# from Homework2.hw2_q2 import utils
+from hw2_q2 import utils
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -238,4 +238,8 @@ if __name__ == '__main__':
     parser.add_argument('-no_softmax', action='store_true')
 
     opt = parser.parse_args()
+
+    # Setting seed for reproducibility
+    utils.configure_seed(seed=42)
+
     main(opt)
