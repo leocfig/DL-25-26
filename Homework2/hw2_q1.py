@@ -22,19 +22,35 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score
 
+class CNNLayer(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel, stride, padding):
+        super().__init__()
+        self.conv = nn.Conv2d(in_ch, out_ch, kernel, stride, padding)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.relu(x)
+        return x
+
 class CNN(nn.Module):
-    def __init__(self, n_classes, use_softmax=False):
+    def __init__(self, n_classes, use_softmax, conv_params, fc_params, input_size):
         super(CNN, self).__init__()
 
-        # TODO: generalizar?
         # Convolutional layers
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1)
+        in_ch = input_size[0]
+        self.convs = nn.ModuleList()
+        for out_ch in conv_params:
+            self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1))
+            in_ch = out_ch
 
         # Fully connected layers
-        self.fc1 = nn.Linear(128 * 28 * 28, 256)
-        self.fc2 = nn.Linear(256, n_classes)
+        H, W = input_size[1], input_size[2]
+        flatten_size = conv_params[-1] * H * W 
+        fc_sizes = [flatten_size] + fc_params + [n_classes]
+        self.fcs = nn.ModuleList()
+        for i in range(len(fc_sizes)-1):
+            self.fcs.append(nn.Linear(fc_sizes[i], fc_sizes[i+1]))
 
         self.activation = nn.ReLU()
 
@@ -44,29 +60,23 @@ class CNN(nn.Module):
             self.softmax = nn.Softmax(dim=1)
 
     def forward(self, x):
-        # TODO: generalizar?
-        x = self.conv1(x)
-        x = self.activation(x)
-
-        x = self.conv2(x)
-        x = self.activation(x)
-
-        x = self.conv3(x)
-        x = self.activation(x)
+        for conv in self.convs:
+            x = conv(x)
 
         # Flatten
         x = x.view(x.size(0), -1)
 
-        x = self.fc1(x)
-        x = self.activation(x)
+        # Fully connected
+        for i, fc in enumerate(self.fcs):
+            x = fc(x)
+            if i < len(self.fcs)-1:
+                x = self.activation(x)
 
-        x = self.fc2(x)
-
+        # Softmax opcional
         if self.use_softmax:
             x = self.softmax(x)
 
         return x
-
 
 
 def train_epoch(loader, model, criterion, optimizer):
@@ -146,8 +156,6 @@ transform = transforms.Compose([
 total_start = time.time()
 
 def main(opt):
-    # utils.configure_seed(seed=42) # fazemos isto na msm apesar de o utils estar na q2?
-
     train_dataset = BloodMNIST(split='train', transform=transform, download=True, size=28)
     val_dataset   = BloodMNIST(split='val',   transform=transform, download=True, size=28)
     test_dataset  = BloodMNIST(split='test',  transform=transform, download=True, size=28)
@@ -162,7 +170,10 @@ def main(opt):
 
     model = CNN(
         n_classes=n_classes,
-        use_softmax=not opt.no_softmax
+        use_softmax=not opt.no_softmax,
+        conv_params=[32, 64, 128],
+        fc_params=[256],
+        input_size=(3, 28, 28)
     ).to(device)
 
     # get an optimizer
