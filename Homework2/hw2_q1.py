@@ -23,29 +23,38 @@ from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score
 
 class CNNLayer(nn.Module):
-    def __init__(self, in_ch, out_ch, kernel, stride, padding):
+    def __init__(self, in_ch, out_ch, kernel, stride, padding, use_pool):
         super().__init__()
         self.conv = nn.Conv2d(in_ch, out_ch, kernel, stride, padding)
         self.relu = nn.ReLU()
+        self.use_pool = use_pool
+        if use_pool:
+            self.pool = nn.MaxPool2d(2)
 
     def forward(self, x):
         x = self.conv(x)
         x = self.relu(x)
+        if self.use_pool:
+            x = self.pool(x)
         return x
 
 class CNN(nn.Module):
-    def __init__(self, n_classes, use_softmax, conv_params, fc_params, input_size):
+    def __init__(self, n_classes, use_softmax, conv_params, fc_params, input_size, use_pool):
         super(CNN, self).__init__()
 
         # Convolutional layers
         in_ch = input_size[0]
         self.convs = nn.ModuleList()
         for out_ch in conv_params:
-            self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1))
+            self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1, use_pool=use_pool))
             in_ch = out_ch
 
         # Fully connected layers
         H, W = input_size[1], input_size[2]
+        if use_pool:
+            for _ in conv_params:
+                H //= 2  # MaxPool 2x2
+                W //= 2
         flatten_size = conv_params[-1] * H * W 
         fc_sizes = [flatten_size] + fc_params + [n_classes]
         self.fcs = nn.ModuleList()
@@ -173,7 +182,8 @@ def main(opt):
         use_softmax=not opt.no_softmax,
         conv_params=[32, 64, 128],
         fc_params=[256],
-        input_size=(3, 28, 28)
+        input_size=(3, 28, 28),
+        use_pool=not opt.no_maxpool
     ).to(device)
 
     # get an optimizer
