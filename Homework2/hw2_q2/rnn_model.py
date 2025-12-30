@@ -140,6 +140,7 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Setting seed for reproducibility
     configure_seed(seed)
 
     train_dataset = load_rnacompete_data(protein_name, split="train")

@@ -1,7 +1,9 @@
+import os
+import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-from utils import masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data
+from utils import masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot
 
 class CNNLayer(nn.Module):
     def __init__(self, in_ch, out_ch, kernel, stride, padding):
@@ -58,7 +60,6 @@ def train_epoch(loader, model, optimizer):
         X (torch.Tensor): (n_examples x n_features)
         y (torch.Tensor): gold labels (n_examples)
         model (nn.Module): a PyTorch defined model
-        criterion: loss function
         optimizer: optimizer used in gradient step
     Returns:
         mean loss (float)
@@ -115,11 +116,12 @@ def main():
     learning_rate = 1e-3
     seed = 42
 
-    conv_params = [16, 32]
+    conv_params = [16,32]
     fc_params = [64]
     seq_len = 41
     alphabet_size = 4
 
+    # Setting seed for reproducibility
     configure_seed(seed)
 
     # ---------------- Load Data ----------------
@@ -157,17 +159,37 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ---------------- TRAIN ----------------
-    for epoch in range(num_epochs):
+    train_losses = []
+    val_spearman = []
+    epochs = np.arange(1, num_epochs + 1)
+    for ii in epochs:
         train_loss = train_epoch(train_loader, model, optimizer)
-        val_spearman = evaluate(val_loader, model)
-        print(f"Epoch {epoch+1:03d} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman:.4f}")
+        val_spearman_value = evaluate(val_loader, model)
+        train_losses.append(train_loss)
+        val_spearman.append(val_spearman_value)
+        print(f"Epoch {ii}/{num_epochs:03d} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman_value:.4f}")
 
     # ---------------- SAVE MODEL ----------------
-    torch.save(model.state_dict(), "rnn_rbfox1.pt")
+    torch.save(model.state_dict(), "cnn_rbfox1.pt")
+    print("Model saved as cnn_rbfox1.pt")
 
-    # ---------------- TEST ----------------
+    # ---------------- TEST --------------------
     test_spearman = evaluate(test_loader, model)
     print(f"Test Spearman: {test_spearman:.4f}")
+
+    # ---------------- PLOT --------------------
+    conv_str = "-".join(map(str, conv_params))
+    fc_str = "-".join(map(str, fc_params))
+    config = f"{batch_size}-{learning_rate}-{conv_str}-{fc_str}"
+
+    os.makedirs("Q2-CNN-results", exist_ok=True) # directory to save results to
+
+    plottables = {
+        "Train Loss": train_losses,
+        "Val Spearman": val_spearman
+    }
+    
+    plot(epochs, plottables, filename=f'Q2-CNN-results/CNN-training-plot-{config}.pdf')
 
     print("Training and testing finished.")
 
