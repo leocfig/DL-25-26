@@ -39,6 +39,9 @@ class RNNHyperparamSpace:
     lr_min: float = 1e-4
     lr_max: float = 1e-2
     num_epochs: int = 30
+    dropout_min: float = 0.0
+    dropout_max: float = 0.5
+    bidirectional_options: List[bool] = (True, False)
 
 
 @dataclass

@@ -36,15 +36,11 @@ def objective_rnn(trial):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     space = RNNHyperparamSpace()
 
-    hidden_size = trial.suggest_categorical(
-        "hidden_size", space.hidden_size
-    )
-    batch_size = trial.suggest_categorical(
-        "batch_size", space.batch_size
-    )
-    learning_rate = trial.suggest_float(
-        "lr", space.lr_min, space.lr_max, log=True
-    )
+    hidden_size = trial.suggest_categorical("hidden_size", space.hidden_size)
+    batch_size = trial.suggest_categorical("batch_size", space.batch_size)
+    learning_rate = trial.suggest_float("lr", space.lr_min, space.lr_max, log=True)
+    bidirectional = trial.suggest_categorical("bidirectional", space.bidirectional_options)
+    dropout = trial.suggest_float("dropout", space.dropout_min, space.dropout_max)
 
     print(f"hidden_size: {hidden_size}, batch_size: {batch_size}, lr: {learning_rate:.5f}\n")
     configure_seed(RNAConfig.SEED)
@@ -57,7 +53,9 @@ def objective_rnn(trial):
     model = RNN(
         input_size=4,
         hidden_size=hidden_size,
-        output_size=1
+        output_size=1,
+        bidirectional=bidirectional,
+        dropout=dropout
     ).to(device)
 
     optimizer = torch.optim.Adam(

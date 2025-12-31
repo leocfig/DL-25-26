@@ -5,61 +5,32 @@ from config import RNAConfig
 from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data
 
 class RNN(nn.Module):
-    def __init__(self, input_size=4, hidden_size=128, output_size=1):
-        super(RNN, self).__init__()
+    def __init__(self, input_size, hidden_size, output_size, bidirectional, dropout):
+        super().__init__()
 
-        self.hidden_size = hidden_size
+        self.bidirectional = bidirectional
+        self.num_directions = 2 if bidirectional else 1
 
-        # Input + Hidden → Hidden
-        self.i2h = nn.Linear(input_size + hidden_size, hidden_size)
-        self.tanh = nn.Tanh()
-
-        # Hidden → Output (regressão)
-        self.h2o = nn.Linear(hidden_size, output_size)
-
-        # Hidden state
-        self.initial_hidden = nn.Parameter(
-            torch.zeros(hidden_size)
+        self.rnn = nn.LSTM(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            batch_first=True,
+            bidirectional=bidirectional
         )
 
-    def single_step(self, x_t, hidden):
-        """
-        x_t: (B, input_size)
-        hidden: (B, hidden_size)
-        """
-        combined = torch.cat((x_t, hidden), dim=1)
-        hidden = self.tanh(self.i2h(combined))
-        return hidden
+        self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        """
-        x: (B, seq_len, alphabet_size)
-        returns: (B, 1)
-        """
+        # x: (B, seq_len, alphabet_size)
+        rnn_out, _ = self.rnn(x)
 
-        batch_size, seq_len, _ = x.size()
+        # Mean pooling over sequence length
+        pooled = rnn_out.mean(dim=1)
+        
+        pooled = self.dropout(pooled)
 
-        hidden = self.initial_hidden.unsqueeze(0).expand(
-            batch_size, self.hidden_size
-        )
-
-        hidden_states = []
-
-        for t in range(seq_len):
-            x_t = x[:, t, :]               # (B, alphabet_size)
-            hidden = self.single_step(x_t, hidden)
-            hidden_states.append(hidden)
-
-        # Stack → (B, seq_len, hidden_size)
-        hidden_states = torch.stack(hidden_states, dim=1)
-
-        # Mean pooling 
-        pooled = hidden_states.mean(dim=1)  # (B, hidden_size)
-
-        # Regression
-        output = self.h2o(pooled)           # (B, 1)
-
-        return output
+        return self.fc(pooled)
 
 def train(model, train_loader, val_loader, optimizer, num_epochs, device):
     train_losses = []
@@ -140,6 +111,7 @@ def main():
     hidden_size = best_params["hidden_size"]
     batch_size = best_params["batch_size"]
     learning_rate = best_params["lr"]
+    dropout = best_params["dropout"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -148,15 +120,18 @@ def main():
 
     train_dataset = load_rnacompete_data(protein_name, split="train")
     val_dataset = load_rnacompete_data(protein_name, split="val")
+    test_dataset = load_rnacompete_data(protein_name, split="test")
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     model = RNN(
         input_size=alphabet_size,
         hidden_size=hidden_size,
-        output_size=1
+        output_size=1,
+        bidirectional=True,
+        dropout=dropout
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -175,9 +150,6 @@ def main():
     torch.save(model.state_dict(), "rnn_rbfox1.pt")
 
     # ---------------- Testing ----------------
-    test_dataset = load_rnacompete_data(protein_name, split="test")
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-
     model.eval()
     test_loss = 0.0
     test_spearman = 0.0
