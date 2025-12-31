@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from utils import masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data
+from config import RNAConfig
+from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data
 
 class RNN(nn.Module):
     def __init__(self, input_size=4, hidden_size=128, output_size=1):
@@ -32,7 +33,7 @@ class RNN(nn.Module):
 
     def forward(self, x):
         """
-        x: (B, seq_len, 4)
+        x: (B, seq_len, alphabet_size)
         returns: (B, 1)
         """
 
@@ -45,7 +46,7 @@ class RNN(nn.Module):
         hidden_states = []
 
         for t in range(seq_len):
-            x_t = x[:, t, :]               # (B, 4)
+            x_t = x[:, t, :]               # (B, alphabet_size)
             hidden = self.single_step(x_t, hidden)
             hidden_states.append(hidden)
 
@@ -56,7 +57,7 @@ class RNN(nn.Module):
         pooled = hidden_states.mean(dim=1)  # (B, hidden_size)
 
         # Regression
-        output = self.h2o(pooled)            # (B, 1)
+        output = self.h2o(pooled)           # (B, 1)
 
         return output
 
@@ -68,7 +69,7 @@ def train(model, train_loader, val_loader, optimizer, num_epochs, device):
     model.to(device)
 
     for epoch in range(num_epochs):
-        # -------- TRAIN --------
+        # -------- Training --------
         model.train()
         train_loss_epoch = 0.0
         n_train_batches = 0
@@ -92,7 +93,7 @@ def train(model, train_loader, val_loader, optimizer, num_epochs, device):
         train_loss_epoch /= n_train_batches
         train_losses.append(train_loss_epoch)
 
-        # -------- VALIDATION --------
+        # -------- Validation --------
         model.eval()
         val_loss_epoch = 0.0
         val_spearman_epoch = 0.0
@@ -129,19 +130,21 @@ def train(model, train_loader, val_loader, optimizer, num_epochs, device):
     return train_losses, val_losses, val_spearmans
 
 def main():
-    # ---------------- CONFIG ----------------
-    # MUDAR PARAMETROS AQUI
     protein_name = "RBFOX1"
-    batch_size = 64
     num_epochs = 30
-    learning_rate = 1e-3
-    hidden_size = 128
-    seed = 42
+    alphabet_size = 4
+
+    # ---------------- Load best hyperparameters ----------------
+    best_params = load_best_params("best_rnn_params.json")
+
+    hidden_size = best_params["hidden_size"]
+    batch_size = best_params["batch_size"]
+    learning_rate = best_params["lr"]
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Setting seed for reproducibility
-    configure_seed(seed)
+    # ---------------- Setting seed for reproducibility ---------
+    configure_seed(RNAConfig.SEED)
 
     train_dataset = load_rnacompete_data(protein_name, split="train")
     val_dataset = load_rnacompete_data(protein_name, split="val")
@@ -151,14 +154,14 @@ def main():
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     model = RNN(
-        input_size=4,
+        input_size=alphabet_size,
         hidden_size=hidden_size,
         output_size=1
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    # ---------------- TRAIN ----------------
+    # ---------------- Training ----------------
     train_losses, val_losses, val_spearmans = train(
         model=model,
         train_loader=train_loader,
@@ -168,10 +171,10 @@ def main():
         device=device
     )
 
-    # ---------------- SAVE MODEL ----------------
+    # ---------------- Saving Model ----------------
     torch.save(model.state_dict(), "rnn_rbfox1.pt")
 
-    # ---------------- TEST ----------------
+    # ---------------- Testing ----------------
     test_dataset = load_rnacompete_data(protein_name, split="test")
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 

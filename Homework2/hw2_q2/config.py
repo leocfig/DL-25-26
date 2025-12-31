@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from typing import List
+
 
 @dataclass
 class RNAConfig:
@@ -28,3 +30,33 @@ class RNAConfig:
     
     VAL_SPLIT_PCT: float = 0.2
     SEED: int = 42 # NOTE: Change this only if you want to test reproducibility
+
+
+@dataclass
+class RNNHyperparamSpace:
+    hidden_size: List[int] = (64, 128, 256, 512)
+    batch_size: List[int] = (32, 64, 128)
+    lr_min: float = 1e-4
+    lr_max: float = 1e-2
+    num_epochs: int = 30
+
+
+@dataclass
+class CNNHyperparamSpace:
+    conv_params: List[list] = (
+        [8, 16],
+        [16, 32],
+        [16, 32, 64],
+        [32, 64, 128]
+    )
+    fc_params: List[list] = (
+        [32],
+        [64],
+        [128],
+        [64, 32],
+        [128, 64]
+    )
+    batch_size: List[int] = (32, 64)
+    lr_min: float = 1e-4
+    lr_max: float = 1e-2
+    num_epochs: int = 30

@@ -1,9 +1,11 @@
 import os
+import json
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import TensorDataset, DataLoader
-from utils import masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot
+from torch.utils.data import DataLoader
+from config import RNAConfig
+from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot, reshape_tensor_dataset
 
 class CNNLayer(nn.Module):
     def __init__(self, in_ch, out_ch, kernel, stride, padding):
@@ -108,38 +110,25 @@ def evaluate(loader, model):
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def main():
-    # ---------------- CONFIG ----------------
-    # MUDAR PARAMETROS AQUI
     protein_name = "RBFOX1"
-    batch_size = 64
     num_epochs = 30
-    learning_rate = 1e-3
-    seed = 42
-
-    conv_params = [16,32]
-    fc_params = [64]
-    seq_len = 41
     alphabet_size = 4
 
-    # Setting seed for reproducibility
-    configure_seed(seed)
+    # ---------------- Load best hyperparameters ----------------
+    best_params = load_best_params("optuna_results/best_cnn_params.json")
 
-    # ---------------- Load Data ----------------
+    conv_params = best_params["conv_params"]
+    fc_params = best_params["fc_params"]
+    batch_size = best_params["batch_size"]
+    learning_rate = best_params["lr"]
+
+    # ---------------- Setting seed for reproducibility ---------
+    configure_seed(RNAConfig.SEED)
+
+    # ---------------- Loading Data ----------------
     train_dataset = load_rnacompete_data(protein_name, split="train")
     val_dataset = load_rnacompete_data(protein_name, split="val")
     test_dataset = load_rnacompete_data(protein_name, split="test")
-
-    def reshape_tensor_dataset(ds):
-        x_list, y_list, mask_list = [], [], []
-        for x, y, mask in ds:
-            x_list.append(x.unsqueeze(0))  # (1, seq_len, 4)
-            y_list.append(y)
-            mask_list.append(mask)
-        # Concatena tudo
-        x_tensor = torch.stack(x_list)
-        y_tensor = torch.stack(y_list)
-        mask_tensor = torch.stack(mask_list)
-        return TensorDataset(x_tensor, y_tensor, mask_tensor)
 
     train_dataset = reshape_tensor_dataset(train_dataset)
     val_dataset = reshape_tensor_dataset(val_dataset)
@@ -152,13 +141,13 @@ def main():
     model = CNN(
         conv_params=conv_params,
         fc_params=fc_params,
-        input_size=(1, seq_len, alphabet_size)
+        input_size=(1, RNAConfig.SEQ_MAX_LEN, alphabet_size)
     )
 
     model.to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-    # ---------------- TRAIN ----------------
+    # ---------------- Training ----------------
     train_losses = []
     val_spearman = []
     epochs = np.arange(1, num_epochs + 1)
@@ -167,17 +156,17 @@ def main():
         val_spearman_value = evaluate(val_loader, model)
         train_losses.append(train_loss)
         val_spearman.append(val_spearman_value)
-        print(f"Epoch {ii}/{num_epochs:03d} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman_value:.4f}")
+        print(f"Epoch {ii}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman_value:.4f}")
 
-    # ---------------- SAVE MODEL ----------------
+    # ---------------- Saving Model ----------------
     torch.save(model.state_dict(), "cnn_rbfox1.pt")
     print("Model saved as cnn_rbfox1.pt")
 
-    # ---------------- TEST --------------------
+    # ---------------- Testing --------------------
     test_spearman = evaluate(test_loader, model)
     print(f"Test Spearman: {test_spearman:.4f}")
 
-    # ---------------- PLOT --------------------
+    # ---------------- Plotting --------------------
     conv_str = "-".join(map(str, conv_params))
     fc_str = "-".join(map(str, fc_params))
     config = f"{batch_size}-{learning_rate}-{conv_str}-{fc_str}"
