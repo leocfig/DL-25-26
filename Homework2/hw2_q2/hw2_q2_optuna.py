@@ -2,8 +2,9 @@ import json
 import os
 import optuna
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import argparse
+import numpy as np
 
 from config import RNAConfig, RNNHyperparamSpace, CNNHyperparamSpace
 from utils import (
@@ -12,8 +13,8 @@ from utils import (
     reshape_tensor_dataset
 )
 
-from rnn_model import RNN, train as train_rnn
-from cnn_model import CNN, train_epoch, evaluate
+from rnn_model import RNN, train_epoch as train_epoch_rnn, evaluate as evaluate_rnn
+from cnn_model import CNN, train_epoch as train_epoch_cnn, evaluate as evaluate_cnn
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -28,6 +29,17 @@ def load_data(protein, batch_size):
 
     return train_loader, val_loader
 
+def subset_dataset(dataset, fraction=0.2, seed=42):
+    """
+    Returns a fixed subset of the dataset with given fraction.
+    """
+    n = len(dataset)
+    k = int(n * fraction)
+
+    rng = np.random.default_rng(seed)
+    indices = rng.choice(n, size=k, replace=False)
+
+    return Subset(dataset, indices)
 
 def objective_rnn(trial):
     print(f"=== Trial {trial.number} : Hyperparameters ===")
@@ -45,9 +57,30 @@ def objective_rnn(trial):
     print(f"hidden_size: {hidden_size}, batch_size: {batch_size}, lr: {learning_rate:.5f}\n")
     configure_seed(RNAConfig.SEED)
 
-    train_loader, val_loader = load_data(
-        protein="RBFOX1",
-        batch_size=batch_size
+    # train_loader, val_loader = load_data(
+    #     protein="RBFOX1",
+    #     batch_size=batch_size
+    # )
+    DATA_FRACTION = 0.2  # 20%
+
+    # Load full datasets
+    full_train_ds = load_rnacompete_data("RBFOX1", split="train")
+    full_val_ds = load_rnacompete_data("RBFOX1", split="val")
+
+    # Subsample
+    train_ds = subset_dataset(
+        full_train_ds, fraction=DATA_FRACTION, seed=RNAConfig.SEED
+    )
+    val_ds = subset_dataset(
+        full_val_ds, fraction=DATA_FRACTION, seed=RNAConfig.SEED
+    )
+
+    # DataLoaders
+    train_loader = DataLoader(
+        train_ds, batch_size=batch_size, shuffle=True
+    )
+    val_loader = DataLoader(
+        val_ds, batch_size=batch_size, shuffle=False
     )
 
     model = RNN(
@@ -63,16 +96,17 @@ def objective_rnn(trial):
         lr=learning_rate
     )
 
-    _, _, val_spearmans = train_rnn(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        optimizer=optimizer,
-        num_epochs=space.num_epochs,
-        device=device
-    )
+    # ---- Training + Evaluation ----
+    best_val_spearman = -1.0
 
-    return max(val_spearmans)
+    for epoch in range(1, space.num_epochs + 1):
+        train_loss = train_epoch_rnn(train_loader, model, optimizer)
+        val_spearman = evaluate_rnn(val_loader, model)
+        best_val_spearman = max(best_val_spearman, val_spearman)
+        print(f"Epoch {epoch}/{space.num_epochs} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman:.4f}")
+
+
+    return best_val_spearman
 
 
 def objective_cnn(trial):
@@ -99,13 +133,35 @@ def objective_cnn(trial):
     configure_seed(RNAConfig.SEED)
 
     # ------ Loading + Reshaping Data ------
-    train_ds = reshape_tensor_dataset(
+    # train_ds = reshape_tensor_dataset(
+    #     load_rnacompete_data("RBFOX1", "train")
+    # )
+    # val_ds = reshape_tensor_dataset(
+    #     load_rnacompete_data("RBFOX1", "val")
+    # )
+
+    # train_loader = DataLoader(
+    #     train_ds, batch_size=batch_size, shuffle=True
+    # )
+    # val_loader = DataLoader(
+    #     val_ds, batch_size=batch_size, shuffle=False
+    # )
+
+    FULL_FRACTION = 0.2  # 20%
+
+    full_train_ds = reshape_tensor_dataset(
         load_rnacompete_data("RBFOX1", "train")
     )
-    val_ds = reshape_tensor_dataset(
+    full_val_ds = reshape_tensor_dataset(
         load_rnacompete_data("RBFOX1", "val")
     )
 
+    train_ds = subset_dataset(
+        full_train_ds, fraction=FULL_FRACTION, seed=RNAConfig.SEED
+    )
+    val_ds = subset_dataset(
+        full_val_ds, fraction=FULL_FRACTION, seed=RNAConfig.SEED
+    )
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True
     )
@@ -128,8 +184,8 @@ def objective_cnn(trial):
     best_val_spearman = -1.0
 
     for epoch in range(1, space.num_epochs + 1):
-        train_loss = train_epoch(train_loader, model, optimizer)
-        val_spearman = evaluate(val_loader, model)
+        train_loss = train_epoch_cnn(train_loader, model, optimizer)
+        val_spearman = evaluate_cnn(val_loader, model)
         best_val_spearman = max(best_val_spearman, val_spearman)
         print(f"Epoch {epoch}/{space.num_epochs} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman:.4f}")
 
