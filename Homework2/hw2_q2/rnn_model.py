@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -7,11 +8,13 @@ from config import RNAConfig
 from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot
 
 class RNN(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, bidirectional, dropout):
+    def __init__(self, input_size, hidden_size, output_size, bidirectional, dropout, use_attention=False):
         super().__init__()
 
         self.bidirectional = bidirectional
+        self.use_attention = use_attention
         self.num_directions = 2 if bidirectional else 1
+        self.hidden_dim = hidden_size * self.num_directions
 
         self.rnn = nn.LSTM(
             input_size=input_size,
@@ -20,18 +23,39 @@ class RNN(nn.Module):
             bidirectional=bidirectional
         )
 
-        self.fc = nn.Linear(hidden_size * self.num_directions, output_size)
+        # Attention Layers
+        if self.use_attention:
+            self.attn_fc = nn.Linear(self.hidden_dim, self.hidden_dim)
+            self.attn_score = nn.Linear(self.hidden_dim, 1, bias=False) # scoring vector v
+
+        self.fc = nn.Linear(self.hidden_dim, output_size)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         # x: (B, seq_len, alphabet_size)
         rnn_out, _ = self.rnn(x)
 
-        # Mean pooling over sequence length
-        pooled = rnn_out.mean(dim=1)
-        
-        pooled = self.dropout(pooled)
+        if self.use_attention:
+            # Additive attention pooling
+            # (B, seq_len, hidden_dim)
+            attn_hidden = torch.tanh(self.attn_fc(rnn_out))
 
+            # (B, seq_len, 1) -> (B, seq_len)
+            attn_scores = self.attn_score(attn_hidden).squeeze(-1)
+
+            # Normalize over sequence length (convert to probabilities)
+            attn_weights = torch.softmax(attn_scores, dim=1)
+
+            # Weighted sum of hidden states
+            pooled = torch.sum(
+                rnn_out * attn_weights.unsqueeze(-1),
+                dim=1
+            )
+        else:
+            # Mean pooling over sequence length
+            pooled = rnn_out.mean(dim=1)
+
+        pooled = self.dropout(pooled)
         return self.fc(pooled)
 
 def train_epoch(loader, model, optimizer, device):
@@ -72,7 +96,7 @@ def evaluate(loader, model, device):
 
     return total_spearman / n_batches
 
-def main():
+def main(opt):
     protein_name = "RBFOX1"
     num_epochs = 30
     alphabet_size = 4
@@ -105,7 +129,8 @@ def main():
         hidden_size=hidden_size,
         output_size=1,
         bidirectional=bidirectional,
-        dropout=dropout
+        dropout=dropout,
+        use_attention=opt.use_attention
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -153,4 +178,8 @@ def main():
     print("Training and testing finished.")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-use_attention', action='store_true')
+
+    opt = parser.parse_args()
+    main(opt)

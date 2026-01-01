@@ -223,6 +223,6 @@ if __name__ == "__main__":
     parser.add_argument('-model', default="both", type=str,
                         choices=["rnn", "cnn", "both"],
                         help="""Which model to optimize: rnn, cnn, or both.""")
-    
+
     opt = parser.parse_args()
     main(opt)
