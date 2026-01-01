@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, Subset
 from typing import List, Tuple
 
 try:
@@ -240,6 +240,19 @@ def load_rnacompete_data(protein_name: str, split: str = 'train', config: RNACon
 
     loader = RNACompeteLoader(config)
     return loader.get_data(protein_name, split)
+
+
+def subset_dataset(dataset, fraction=0.2, seed=42):
+    """
+    Returns a fixed subset of the dataset with given fraction.
+    """
+    n = len(dataset)
+    k = int(n * fraction)
+
+    rng = np.random.default_rng(seed)
+    indices = rng.choice(n, size=k, replace=False)
+
+    return Subset(dataset, indices)
 
 
 def load_best_params(json_path):

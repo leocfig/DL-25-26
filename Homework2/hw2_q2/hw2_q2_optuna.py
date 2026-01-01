@@ -2,15 +2,15 @@ import json
 import os
 import optuna
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 import argparse
-import numpy as np
 
 from config import RNAConfig, RNNHyperparamSpace, CNNHyperparamSpace
 from utils import (
     load_rnacompete_data,
     configure_seed,
-    reshape_tensor_dataset
+    reshape_tensor_dataset,
+    subset_dataset
 )
 
 from rnn_model import RNN, train_epoch as train_epoch_rnn, evaluate as evaluate_rnn
@@ -19,27 +19,6 @@ from cnn_model import CNN, train_epoch as train_epoch_cnn, evaluate as evaluate_
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
 
-
-def load_data(protein, batch_size):
-    train_ds = load_rnacompete_data(protein, split="train")
-    val_ds = load_rnacompete_data(protein, split="val")
-
-    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
-
-    return train_loader, val_loader
-
-def subset_dataset(dataset, fraction=0.2, seed=42):
-    """
-    Returns a fixed subset of the dataset with given fraction.
-    """
-    n = len(dataset)
-    k = int(n * fraction)
-
-    rng = np.random.default_rng(seed)
-    indices = rng.choice(n, size=k, replace=False)
-
-    return Subset(dataset, indices)
 
 def objective_rnn(trial):
     print(f"=== Trial {trial.number} : Hyperparameters ===")
@@ -57,22 +36,16 @@ def objective_rnn(trial):
     print(f"hidden_size: {hidden_size}, batch_size: {batch_size}, lr: {learning_rate:.5f}\n")
     configure_seed(RNAConfig.SEED)
 
-    # train_loader, val_loader = load_data(
-    #     protein="RBFOX1",
-    #     batch_size=batch_size
-    # )
-    DATA_FRACTION = 0.2  # 20%
-
     # Load full datasets
     full_train_ds = load_rnacompete_data("RBFOX1", split="train")
     full_val_ds = load_rnacompete_data("RBFOX1", split="val")
 
     # Subsample
     train_ds = subset_dataset(
-        full_train_ds, fraction=DATA_FRACTION, seed=RNAConfig.SEED
+        full_train_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
     )
     val_ds = subset_dataset(
-        full_val_ds, fraction=DATA_FRACTION, seed=RNAConfig.SEED
+        full_val_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
     )
 
     # DataLoaders
@@ -147,8 +120,6 @@ def objective_cnn(trial):
     #     val_ds, batch_size=batch_size, shuffle=False
     # )
 
-    FULL_FRACTION = 0.2  # 20%
-
     full_train_ds = reshape_tensor_dataset(
         load_rnacompete_data("RBFOX1", "train")
     )
@@ -157,10 +128,10 @@ def objective_cnn(trial):
     )
 
     train_ds = subset_dataset(
-        full_train_ds, fraction=FULL_FRACTION, seed=RNAConfig.SEED
+        full_train_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
     )
     val_ds = subset_dataset(
-        full_val_ds, fraction=FULL_FRACTION, seed=RNAConfig.SEED
+        full_val_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
     )
     train_loader = DataLoader(
         train_ds, batch_size=batch_size, shuffle=True

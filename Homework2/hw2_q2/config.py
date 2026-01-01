@@ -31,6 +31,8 @@ class RNAConfig:
     VAL_SPLIT_PCT: float = 0.2
     SEED: int = 42 # NOTE: Change this only if you want to test reproducibility
 
+    # Fraction of the full dataset used in preliminary experiments to reduce training time
+    DATA_FRACTION = 0.2  # 20%
 
 @dataclass
 class RNNHyperparamSpace:
