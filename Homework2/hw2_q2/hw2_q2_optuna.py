@@ -73,8 +73,8 @@ def objective_rnn(trial):
     best_val_spearman = -1.0
 
     for epoch in range(1, space.num_epochs + 1):
-        train_loss = train_epoch_rnn(train_loader, model, optimizer)
-        val_spearman = evaluate_rnn(val_loader, model)
+        train_loss = train_epoch_rnn(train_loader, model, optimizer, device)
+        val_spearman = evaluate_rnn(val_loader, model, device)
         best_val_spearman = max(best_val_spearman, val_spearman)
         print(f"Epoch {epoch}/{space.num_epochs} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman:.4f}")
 

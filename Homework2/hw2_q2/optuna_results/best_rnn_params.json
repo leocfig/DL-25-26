@@ -1,0 +1,10 @@
+{
+    "best_params": {
+        "hidden_size": 512,
+        "batch_size": 64,
+        "lr": 0.000568745120715046,
+        "bidirectional": false,
+        "dropout": 0.2853806253696806
+    },
+    "best_spearman": 0.6569680036379109
+}
