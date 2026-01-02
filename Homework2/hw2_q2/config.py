@@ -40,14 +40,20 @@ class RNNHyperparamSpace:
     batch_size: List[int] = (32, 64, 128)
     lr_min: float = 1e-4
     lr_max: float = 1e-2
-    num_epochs: int = 30
     dropout_min: float = 0.0
     dropout_max: float = 0.5
     bidirectional_options: List[bool] = (True, False)
+    num_epochs: int = 30
 
 
 @dataclass
 class CNNHyperparamSpace:
+    kernel_size: List[int] = (3, 5, 7)
+    batch_size: List[int] = (32, 64, 128)
+    lr_min: float = 1e-4
+    lr_max: float = 1e-2
+    dropout_min: float = 0.0
+    dropout_max: float = 0.5
     conv_params: List[list] = (
         [8, 16],
         [16, 32],
@@ -61,7 +67,5 @@ class CNNHyperparamSpace:
         [64, 32],
         [128, 64]
     )
-    batch_size: List[int] = (32, 64)
-    lr_min: float = 1e-4
-    lr_max: float = 1e-2
+    no_maxpool: List[bool] = (True, False)
     num_epochs: int = 30

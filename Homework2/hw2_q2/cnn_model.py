@@ -7,35 +7,47 @@ from config import RNAConfig
 from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot, reshape_tensor_dataset
 
 class CNNLayer(nn.Module):
-    def __init__(self, in_ch, out_ch, kernel, stride, padding):
+    def __init__(self, in_ch, out_ch, kernel, stride, padding, use_pool, dropout):
         super().__init__()
         self.conv = nn.Conv2d(in_ch, out_ch, kernel, stride, padding)
         self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(dropout)
+        self.use_pool = use_pool
+        if use_pool:
+            self.pool = nn.MaxPool2d(2)
 
     def forward(self, x):
         x = self.conv(x)
         x = self.relu(x)
+        x = self.dropout(x)
+        if self.use_pool:
+            x = self.pool(x)
         return x
 
 class CNN(nn.Module):
-    def __init__(self, conv_params, fc_params, input_size):
+    def __init__(self, conv_params, fc_params, input_size, kernel_size, use_pool, dropout):
         super(CNN, self).__init__()
 
         # Convolutional layers
         in_ch = input_size[0]
         self.convs = nn.ModuleList()
         for out_ch in conv_params:
-            self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1))
+            self.convs.append(CNNLayer(in_ch, out_ch, kernel=kernel_size, stride=1, padding=kernel_size // 2, use_pool=use_pool, dropout=dropout))
             in_ch = out_ch
 
-        # Fully connected layers
-        H, W = input_size[1], input_size[2]
-        flatten_size = conv_params[-1] * H * W 
+        # Infer flatten size dynamically
+        with torch.no_grad():
+            dummy = torch.zeros(1, *input_size)
+            for conv in self.convs:
+                dummy = conv(dummy)
+            flatten_size = dummy.view(1, -1).size(1)
+
         fc_sizes = [flatten_size] + fc_params + [1]  # output = 1 (regression)
         self.fcs = nn.ModuleList()
         for i in range(len(fc_sizes)-1):
             self.fcs.append(nn.Linear(fc_sizes[i], fc_sizes[i+1]))
 
+        self.dropout = nn.Dropout(dropout)
         self.activation = nn.ReLU()
 
     def forward(self, x):
@@ -49,6 +61,7 @@ class CNN(nn.Module):
         for i, fc in enumerate(self.fcs):
             x = fc(x)
             if i < len(self.fcs)-1:
+                x = self.dropout(x)
                 x = self.activation(x)
 
         return x
@@ -116,10 +129,13 @@ def main():
     # ---------------- Load best hyperparameters ----------------
     best_params = load_best_params("optuna_results/best_cnn_params.json")
 
-    conv_params = best_params["conv_params"]
-    fc_params = best_params["fc_params"]
+    kernel_size = best_params["kernel_size"]
     batch_size = best_params["batch_size"]
     learning_rate = best_params["lr"]
+    dropout = best_params["dropout"]
+    conv_params = best_params["conv_params"]
+    fc_params = best_params["fc_params"]
+    no_maxpool = best_params["no_maxpool"]
 
     # ---------------- Setting seed for reproducibility ---------
     configure_seed(RNAConfig.SEED)
@@ -140,7 +156,10 @@ def main():
     model = CNN(
         conv_params=conv_params,
         fc_params=fc_params,
-        input_size=(1, RNAConfig.SEQ_MAX_LEN, alphabet_size)
+        input_size=(1, RNAConfig.SEQ_MAX_LEN, alphabet_size),
+        kernel_size=kernel_size,
+        use_pool=not no_maxpool,
+        dropout=dropout
     )
 
     model.to(device)

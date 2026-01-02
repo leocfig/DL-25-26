@@ -89,20 +89,20 @@ def objective_cnn(trial):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     space = CNNHyperparamSpace()
 
-    conv_params = trial.suggest_categorical(
-        "conv_params", space.conv_params
-    )
-    fc_params = trial.suggest_categorical(
-        "fc_params", space.fc_params
-    )
-    batch_size = trial.suggest_categorical(
-        "batch_size", space.batch_size
-    )
-    learning_rate = trial.suggest_float(
-        "lr", space.lr_min, space.lr_max, log=True
-    )
+    kernel_size = trial.suggest_categorical("kernel_size", space.kernel_size)
+    batch_size = trial.suggest_categorical("batch_size", space.batch_size)
+    learning_rate = trial.suggest_float("lr", space.lr_min, space.lr_max, log=True)
+    dropout = trial.suggest_float("dropout", space.dropout_min, space.dropout_max)
+    conv_params = trial.suggest_categorical("conv_params", space.conv_params)
+    fc_params = trial.suggest_categorical("fc_params", space.fc_params)
+    no_maxpool = trial.suggest_categorical("no_maxpool", space.no_maxpool)
 
-    print(f"conv_params: {conv_params}, fc_params: {fc_params}, batch_size: {batch_size}, lr: {learning_rate:.5f}\n")
+    print(
+        f"kernel_size: {kernel_size}, batch_size: {batch_size}, "
+        f"lr: {learning_rate:.5f}, dropout: {dropout:.2f}, "
+        f"conv_params: {conv_params}, fc_params: {fc_params}, "
+        f"no_maxpool: {no_maxpool}\n"
+    )
     configure_seed(RNAConfig.SEED)
 
     # ------ Loading + Reshaping Data ------
@@ -144,7 +144,10 @@ def objective_cnn(trial):
     model = CNN(
         conv_params=conv_params,
         fc_params=fc_params,
-        input_size=(1, RNAConfig.SEQ_MAX_LEN, 4)
+        input_size=(1, RNAConfig.SEQ_MAX_LEN, 4),
+        kernel_size=kernel_size,
+        use_pool=not no_maxpool,
+        dropout=dropout
     ).to(device)
 
     optimizer = torch.optim.Adam(
