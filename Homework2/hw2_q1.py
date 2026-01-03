@@ -5,7 +5,7 @@
 
 
 import os
-from hw2_q2 import utils
+from hw2_q2 import utils_w_masking
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -47,13 +47,13 @@ class CNN(nn.Module):
             self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1, use_pool=use_pool))
             in_ch = out_ch
 
-        # Fully connected layers
-        H, W = input_size[1], input_size[2]
-        if use_pool:
-            for _ in conv_params:
-                H //= 2  # MaxPool 2x2
-                W //= 2
-        flatten_size = conv_params[-1] * H * W 
+        # Infer flatten size dynamically
+        with torch.no_grad():
+            dummy = torch.zeros(1, *input_size)
+            for conv in self.convs:
+                dummy = conv(dummy)
+            flatten_size = dummy.view(1, -1).size(1)
+
         fc_sizes = [flatten_size] + fc_params + [n_classes]
         self.fcs = nn.ModuleList()
         for i in range(len(fc_sizes)-1):
@@ -257,6 +257,6 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     # Setting seed for reproducibility
-    utils.configure_seed(seed=42)
+    utils_w_masking.configure_seed(seed=42)
 
     main(opt)

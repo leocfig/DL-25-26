@@ -6,7 +6,7 @@ This project provides a pre-built data pipeline (`utils.py`) to handle data inge
 
 Ensure the following files are in your project directory:
 
-1.  `utils.py` (The provided data loader)
+1.  `utils_w_masking.py` (The provided data loader)
 2.  `norm_data.txt` (The raw data matrix)
 3.  `metadata.xlsx`
 
@@ -30,14 +30,14 @@ The `config.py` file contains the `RNAConfig` dataclass, which manages global se
 
 ## 3\. Usage
 
-You do not need to parse files manually. Use the `load_rnacompete_data` function from `utils`. The first time you run the function, it will preprocess the data and save it for future use. Then, when you call the function again, it will load the preprocessed data.
+You do not need to parse files manually. Use the `load_rnacompete_data` function from `utils_w_masking`. The first time you run the function, it will preprocess the data and save it for future use. Then, when you call the function again, it will load the preprocessed data.
 
 ### Example Code
 
 ```python
 import torch
 from torch.utils.data import DataLoader
-from utils import load_rnacompete_data
+from utils_w_masking import load_rnacompete_data
 
 # 1. Load Data for a specific protein (e.g., 'RBFOX1', 'PTB', 'A1CF')
 # This returns a PyTorch TensorDataset ready for training
@@ -50,10 +50,11 @@ train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 # 3. Training Loop Example
 for batch in train_loader:
-    # Unpack the batch: (Sequences, Intensities, ValidityMasks)
-    x, y, mask = batch
+    # Unpack the batch: (Sequences, SequenceMasks, Intensities, ValidityMasks)
+    x, x_mask, y, mask = batch
     
     # x shape:    (Batch, 41, 4)  <- One-Hot Encoded Sequence
+    # x mask:     (Batch, 41)     <- Mask for each sequence
     # y shape:    (Batch, 1)      <- Normalized Binding Intensity
     # mask shape: (Batch, 1)      <- 1.0 if valid, 0.0 if NaN
     
@@ -93,10 +94,10 @@ You must use the mask to zero out the loss for invalid data points. Standard `MS
 
 ## 5. Helpers you should use
 
-**Seed configuration:** `utils.configure_seed`
+**Seed configuration:** `utils_w_masking.configure_seed`
 
-**Loss function:** `utils.masked_mse_loss`
+**Loss function:** `utils_w_masking.masked_mse_loss`
 
-**Correlation metric:** `utils.masked_spearman_correlation`
+**Correlation metric:** `utils_w_masking.masked_spearman_correlation`
 
-**Metrics over epochs plot function:** `utils.plot`
+**Metrics over epochs plot function:** `utils_w_masking.plot`

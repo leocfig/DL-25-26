@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import os
 import numpy as np
 from config import RNAConfig
-from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot
+from utils_w_masking import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot
 
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, bidirectional, dropout, use_attention=False):
@@ -31,7 +31,7 @@ class RNN(nn.Module):
         self.fc = nn.Linear(self.hidden_dim, output_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, x_mask):
         # x: (B, seq_len, alphabet_size)
         rnn_out, _ = self.rnn(x)
 
@@ -43,17 +43,29 @@ class RNN(nn.Module):
             # (B, seq_len, 1) -> (B, seq_len)
             attn_scores = self.attn_score(attn_hidden).squeeze(-1)
 
+            # Mask padding positions
+            attn_scores = attn_scores.masked_fill(x_mask == 0, -1e9)
+
             # Normalize over sequence length (convert to probabilities)
             attn_weights = torch.softmax(attn_scores, dim=1)
 
             # Weighted sum of hidden states
-            pooled = torch.sum(
-                rnn_out * attn_weights.unsqueeze(-1),
-                dim=1
-            )
+            pooled = torch.sum(rnn_out * attn_weights.unsqueeze(-1), dim=1)
         else:
-            # Mean pooling over sequence length
-            pooled = rnn_out.mean(dim=1)
+            # x_mask: (B, seq_len) → (B, seq_len, 1)
+            mask = x_mask.unsqueeze(-1)
+
+            # Zero out padded positions
+            masked_rnn_out = rnn_out * mask
+
+            # Sum only valid positions
+            sum_hidden = masked_rnn_out.sum(dim=1)
+
+            # Divide by number of valid tokens
+            lengths = mask.sum(dim=1).clamp(min=1)
+
+            # Mean pooling
+            pooled = sum_hidden / lengths
 
         pooled = self.dropout(pooled)
         return self.fc(pooled)
@@ -62,13 +74,14 @@ def train_epoch(loader, model, optimizer, device):
     model.train()
     total_loss = 0.0
 
-    for x, y, mask in loader:
+    for x, x_mask, y, mask in loader:
         x = x.to(device)
+        x_mask = x_mask.to(device)
         y = y.to(device)
         mask = mask.to(device)
 
         optimizer.zero_grad()
-        preds = model(x)
+        preds = model(x, x_mask)
         loss = masked_mse_loss(preds, y, mask)
         loss.backward()
         optimizer.step()
@@ -83,12 +96,13 @@ def evaluate(loader, model, device):
     n_batches = 0
 
     with torch.no_grad():
-        for x, y, mask in loader:
+        for x, x_mask, y, mask in loader:
             x = x.to(device)
+            x_mask = x_mask.to(device)
             y = y.to(device)
             mask = mask.to(device)
 
-            preds = model(x)
+            preds = model(x, x_mask)
             spearman = masked_spearman_correlation(preds, y, mask)
 
             total_spearman += spearman.item()
@@ -132,6 +146,8 @@ def main(opt):
         dropout=dropout,
         use_attention=opt.use_attention
     )
+
+    model = model.to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 

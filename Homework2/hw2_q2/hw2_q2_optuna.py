@@ -6,11 +6,10 @@ from torch.utils.data import DataLoader
 import argparse
 
 from config import RNAConfig, RNNHyperparamSpace, CNNHyperparamSpace
-from utils import (
+from utils_w_masking import (
     load_rnacompete_data,
     configure_seed,
     reshape_tensor_dataset,
-    subset_dataset
 )
 
 from rnn_model import RNN, train_epoch as train_epoch_rnn, evaluate as evaluate_rnn
@@ -36,26 +35,14 @@ def objective_rnn(trial):
     print(f"hidden_size: {hidden_size}, batch_size: {batch_size}, lr: {learning_rate:.5f}\n")
     configure_seed(RNAConfig.SEED)
 
-    # Load full datasets
-    full_train_ds = load_rnacompete_data("RBFOX1", split="train")
-    full_val_ds = load_rnacompete_data("RBFOX1", split="val")
+    # ------ Loading Data ------
+    train_ds = load_rnacompete_data(protein="RBFOX1", split="train")
+    val_ds = load_rnacompete_data(protein="RBFOX1", split="val")
 
-    # Subsample
-    train_ds = subset_dataset(
-        full_train_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
-    )
-    val_ds = subset_dataset(
-        full_val_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
-    )
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
-    # DataLoaders
-    train_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True
-    )
-    val_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False
-    )
-
+    # ---- Model ----
     model = RNN(
         input_size=4,
         hidden_size=hidden_size,
@@ -64,10 +51,7 @@ def objective_rnn(trial):
         dropout=dropout
     ).to(device)
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=learning_rate
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ---- Training + Evaluation ----
     best_val_spearman = -1.0
@@ -106,39 +90,11 @@ def objective_cnn(trial):
     configure_seed(RNAConfig.SEED)
 
     # ------ Loading + Reshaping Data ------
-    # train_ds = reshape_tensor_dataset(
-    #     load_rnacompete_data("RBFOX1", "train")
-    # )
-    # val_ds = reshape_tensor_dataset(
-    #     load_rnacompete_data("RBFOX1", "val")
-    # )
+    train_ds = reshape_tensor_dataset(load_rnacompete_data("RBFOX1", "train"))
+    val_ds = reshape_tensor_dataset(load_rnacompete_data("RBFOX1", "val"))
 
-    # train_loader = DataLoader(
-    #     train_ds, batch_size=batch_size, shuffle=True
-    # )
-    # val_loader = DataLoader(
-    #     val_ds, batch_size=batch_size, shuffle=False
-    # )
-
-    full_train_ds = reshape_tensor_dataset(
-        load_rnacompete_data("RBFOX1", "train")
-    )
-    full_val_ds = reshape_tensor_dataset(
-        load_rnacompete_data("RBFOX1", "val")
-    )
-
-    train_ds = subset_dataset(
-        full_train_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
-    )
-    val_ds = subset_dataset(
-        full_val_ds, fraction=RNAConfig.DATA_FRACTION, seed=RNAConfig.SEED
-    )
-    train_loader = DataLoader(
-        train_ds, batch_size=batch_size, shuffle=True
-    )
-    val_loader = DataLoader(
-        val_ds, batch_size=batch_size, shuffle=False
-    )
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
     # ---- Model ----
     model = CNN(
@@ -150,9 +106,7 @@ def objective_cnn(trial):
         dropout=dropout
     ).to(device)
 
-    optimizer = torch.optim.Adam(
-        model.parameters(), lr=learning_rate
-    )
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     # ---- Training + Evaluation ----
     best_val_spearman = -1.0

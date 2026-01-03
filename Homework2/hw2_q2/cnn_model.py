@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from config import RNAConfig
-from utils import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot, reshape_tensor_dataset
+from utils_w_masking import load_best_params, masked_mse_loss, masked_spearman_correlation, configure_seed, load_rnacompete_data, plot, reshape_tensor_dataset
 
 class CNNLayer(nn.Module):
     def __init__(self, in_ch, out_ch, kernel, stride, padding, use_pool, dropout):
@@ -50,14 +50,18 @@ class CNN(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.activation = nn.ReLU()
 
-    def forward(self, x):
+    def forward(self, x, x_mask):
+        # Apply mask to zero out padded positions
+        x = x * x_mask.unsqueeze(1)  # (B, 1, seq_len, 4), broadcast over channel
+
+        # Pass through convolutional layers
         for conv in self.convs:
             x = conv(x)
 
         # Flatten
         x = x.view(x.size(0), -1)
 
-        # Fully connected
+        # Fully connected layers
         for i, fc in enumerate(self.fcs):
             x = fc(x)
             if i < len(self.fcs)-1:
@@ -80,15 +84,16 @@ def train_epoch(loader, model, optimizer):
     """
     model.train()
     total_loss = 0
-    for x, y, mask in loader:
+    for x, x_mask, y, mask in loader:
         x = x.to(device)
+        x_mask = x_mask.to(device)
         y = y.to(device)
         mask = mask.to(device)
 
         # Zero the gradients from the previous step
         optimizer.zero_grad()
         # Forward pass
-        preds = model(x)
+        preds = model(x, x_mask)
         # Compute the loss between predicted outputs and true labels
         loss = masked_mse_loss(preds, y, mask)
         # Backpropagate the loss: compute gradients
@@ -107,12 +112,13 @@ def evaluate(loader, model):
     n_batches = 0
 
     with torch.no_grad():
-        for x, y, mask in loader:
+        for x, x_mask, y, mask in loader:
             x = x.to(device)
+            x_mask = x_mask.to(device)
             y = y.to(device)
             mask = mask.to(device)
 
-            preds = model(x)
+            preds = model(x, x_mask)
             spearman = masked_spearman_correlation(preds, y, mask)
             total_spearman += spearman.item()
             n_batches += 1
