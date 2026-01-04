@@ -14,7 +14,7 @@ class CNNLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.use_pool = use_pool
         if use_pool:
-            self.pool = nn.MaxPool2d(2)
+            self.pool = nn.MaxPool2d(kernel_size=(2, 1))
 
     def forward(self, x):
         x = self.conv(x)
