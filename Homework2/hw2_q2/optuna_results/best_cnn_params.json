@@ -1,16 +1,18 @@
 {
     "best_params": {
+        "kernel_size": 7,
+        "batch_size": 128,
+        "lr": 0.00034881696329443587,
+        "dropout": 0.18079852008207586,
         "conv_params": [
+            16,
             32,
-            64,
-            128
+            64
         ],
         "fc_params": [
-            64,
-            32
+            128
         ],
-        "batch_size": 64,
-        "lr": 0.00074697575772725
+        "no_maxpool": false
     },
-    "best_spearman": 0.5703764789198574
+    "best_spearman": 0.6437025697773726
 }
