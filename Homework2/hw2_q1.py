@@ -4,6 +4,7 @@
 #https://github.com/MedMNIST/MedMNIST
 
 
+import json
 import os
 from hw2_q2 import utils_w_masking
 import torch
@@ -171,10 +172,12 @@ def main(opt):
     val_loader   = DataLoader(val_dataset, batch_size=opt.batch_size, shuffle=False)
     test_loader  = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False)
 
-    # initialize the model
-    # get an optimizer
-    # get a loss criterion
+    dir_name = "Q1-CNN-results"
+    os.makedirs(dir_name, exist_ok=True) # directory to save results to
+    model_path = os.path.join(dir_name, opt.save_path)
+    scores_path = os.path.join(dir_name, opt.scores)
 
+    # initialize the model
     model = CNN(
         n_classes=n_classes,
         use_softmax=not opt.no_softmax,
@@ -198,9 +201,9 @@ def main(opt):
     # training loop
     ### you can use the code below or implement your own loop ###
     epochs = np.arange(1, opt.epochs + 1)
-    train_losses = []
-    val_accs = []
-    test_accs = []
+    train_losses, val_accs = [], []
+    best_valid = 0.0
+    best_epoch = -1
     for ii in epochs:
         epoch_start = time.time()
 
@@ -215,15 +218,12 @@ def main(opt):
         print(f"Epoch {ii}/{opt.epochs} | "
             f"Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | "
             f"Time: {epoch_time:.2f} sec")
-
-        # Test Accuracy
-        test_acc = evaluate(test_loader, model)
-        print("Test Accuracy:", test_acc)
-        test_accs.append(test_acc)
-
-    # Save the model
-    torch.save(model.state_dict(), "bloodmnist_cnn.pth")
-    print("Model saved as bloodmnist_cnn.pth")
+        
+        # save the best model checkpoint
+        if val_acc > best_valid:
+            best_valid = val_acc
+            best_epoch = ii
+            torch.save(model.state_dict(), model_path)
 
     # --------- After Training ----------
     total_end = time.time()
@@ -233,12 +233,40 @@ def main(opt):
         f"({total_time:.2f} seconds)")
     print('Final Test acc: %.4f' % (evaluate(test_loader, model)))
 
-    config = f"{opt.learning_rate}-{opt.optimizer}-{opt.no_maxpool}-{opt.no_softmax}"
+    print("\nReloading best checkpoint")
+    best_model = CNN(
+        n_classes=n_classes,
+        use_softmax=not opt.no_softmax,
+        conv_params=[32, 64, 128],
+        fc_params=[256],
+        input_size=(3, 28, 28),
+        use_pool=not opt.no_maxpool
+    ).to(device)
+    best_model.load_state_dict(torch.load(model_path))
+    test_acc = evaluate(test_loader, best_model)
+    print('Best model test acc: {:.4f}'.format(test_acc))
+    print(f"Model saved to {model_path}")
 
-    os.makedirs("Q1-CNN-results", exist_ok=True) # directory to save results to
+    config = f"{opt.learning_rate}-{opt.optimizer}-{opt.no_maxpool}-{opt.no_softmax}"
+    config_json = {
+        "lr": opt.learning_rate,
+        "optimizer": opt.optimizer,
+        "maxpool": not opt.no_maxpool,
+        "softmax": not opt.no_softmax
+    }
+
     plot(epochs, train_losses, ylabel='Loss', name='Q1-CNN-results/CNN-training-loss-{}'.format(config))
     plot(epochs, val_accs, ylabel='Accuracy', name='Q1-CNN-results/CNN-validation-accuracy-{}'.format(config))
-    plot(epochs, test_accs, ylabel='Accuracy', name='Q1-CNN-results/CNN-test-accuracy-{}'.format(config))
+
+    with open(scores_path, "w") as f:
+        json.dump(
+            {"config": config_json,
+             "best_valid": float(best_valid),
+             "selected_epoch": int(best_epoch),
+             "test": float(test_acc),
+             "time": total_time},
+            f, indent=4
+        )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -251,6 +279,8 @@ if __name__ == '__main__':
                         help="""Learning rate for updates.""")
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='adam')
+    parser.add_argument('-save-path', default='bloodmnist_cnn.pth')
+    parser.add_argument('-scores', default="CNN-softmax-scores.json")
     parser.add_argument('-no_maxpool', action='store_true')
     parser.add_argument('-no_softmax', action='store_true')
 
