@@ -106,9 +106,10 @@ def train_epoch(loader, model, optimizer):
     return total_loss / len(loader)
 
 
-def evaluate(loader, model):
+def evaluate(loader, model, device):
     model.eval()
-    total_spearman = 0
+    total_loss = 0.0
+    total_spearman = 0.0
     n_batches = 0
 
     with torch.no_grad():
@@ -119,11 +120,15 @@ def evaluate(loader, model):
             mask = mask.to(device)
 
             preds = model(x, x_mask)
+
+            loss = masked_mse_loss(preds, y, mask)
             spearman = masked_spearman_correlation(preds, y, mask)
+
+            total_loss += loss.item()
             total_spearman += spearman.item()
             n_batches += 1
 
-    return total_spearman / n_batches
+    return total_loss / n_batches, total_spearman / n_batches
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -173,21 +178,33 @@ def main():
 
     # ---------------- Training ----------------
     train_losses = []
+    val_losses = []
     val_spearman = []
     epochs = np.arange(1, num_epochs + 1)
+
     for ii in epochs:
+        # ---- Train epoch ----
         train_loss = train_epoch(train_loader, model, optimizer)
-        val_spearman_value = evaluate(val_loader, model)
+
+        # ---- Evaluate validation set ----
+        val_loss, val_spear = evaluate(val_loader, model, device)
+
+        # ---- Save metrics ----
         train_losses.append(train_loss)
-        val_spearman.append(val_spearman_value)
-        print(f"Epoch {ii}/{num_epochs} | Train Loss: {train_loss:.4f} | Val Spearman: {val_spearman_value:.4f}")
+        val_losses.append(val_loss)
+        val_spearman.append(val_spear)
+
+        print(f"Epoch {ii}/{num_epochs} | "
+            f"Train Loss: {train_loss:.4f} | "
+            f"Val Loss: {val_loss:.4f} | "
+            f"Val Spearman: {val_spear:.4f}")
 
     # ---------------- Saving Model ----------------
     torch.save(model.state_dict(), "cnn_rbfox1.pt")
     print("Model saved as cnn_rbfox1.pt")
 
     # ---------------- Testing --------------------
-    test_spearman = evaluate(test_loader, model)
+    _, test_spearman = evaluate(test_loader, model, device)
     print(f"Test Spearman: {test_spearman:.4f}")
 
     # ---------------- Plotting --------------------
@@ -198,13 +215,14 @@ def main():
     os.makedirs("Q2-CNN-results", exist_ok=True) # directory to save results to
 
     plottables = {
-        "Train Loss": train_losses,
-        "Val Spearman": val_spearman
+        "Train Loss (train set)": train_losses,
+        "Validation Loss (val set)": val_losses,
+        "Validation Spearman (val set)": val_spearman
     }
-    
+
     plot(epochs, plottables, filename=f'Q2-CNN-results/CNN-training-plot-{config}.pdf')
 
-    print("Training and testing finished.")
+    print("Training, evaluation, and plotting finished.")
 
 if __name__ == "__main__":
     main()

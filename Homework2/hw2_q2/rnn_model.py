@@ -92,6 +92,7 @@ def train_epoch(loader, model, optimizer, device):
 
 def evaluate(loader, model, device):
     model.eval()
+    total_loss = 0.0
     total_spearman = 0.0
     n_batches = 0
 
@@ -103,12 +104,15 @@ def evaluate(loader, model, device):
             mask = mask.to(device)
 
             preds = model(x, x_mask)
+
+            loss = masked_mse_loss(preds, y, mask)
             spearman = masked_spearman_correlation(preds, y, mask)
 
+            total_loss += loss.item()
             total_spearman += spearman.item()
             n_batches += 1
 
-    return total_spearman / n_batches
+    return total_loss / n_batches, total_spearman / n_batches
 
 def main(opt):
     protein_name = "RBFOX1"
@@ -153,19 +157,26 @@ def main(opt):
 
     # ---------------- Training ----------------
     train_losses = []
+    val_losses = []
     val_spearman = []
     epochs = np.arange(1, num_epochs + 1)
     for epoch in epochs:
+        # ---- Train epoch ----
         train_loss = train_epoch(train_loader, model, optimizer, device)
-        val_spearman_value = evaluate(val_loader, model, device)
 
+        # ---- Evaluate validation set (loss + spearman) ----
+        val_loss, val_spear = evaluate(val_loader, model, device)
+
+        # ---- Save metrics ----
         train_losses.append(train_loss)
-        val_spearman.append(val_spearman_value)
+        val_losses.append(val_loss)
+        val_spearman.append(val_spear)
 
         print(
             f"Epoch {epoch}/{num_epochs} | "
             f"Train MSE: {train_loss:.4f} | "
-            f"Val Spearman: {val_spearman_value:.4f}"
+            f"Val MSE: {val_loss:.4f} | "
+            f"Val Spearman: {val_spear:.4f}"
         )
 
     # ---------------- Saving Model ----------------
@@ -173,7 +184,7 @@ def main(opt):
     print("Model saved as rnn_rbfox1.pt")
 
     # ---------------- Testing ----------------
-    test_spearman = evaluate(test_loader, model, device)
+    _, test_spearman = evaluate(test_loader, model, device)
     print(f"Test Spearman: {test_spearman:.4f}")
 
     # ---------------- Plotting --------------------
@@ -181,8 +192,9 @@ def main(opt):
     os.makedirs("Q2-RNN-results", exist_ok=True)
 
     plottables = {
-        "Train Loss": train_losses,
-        "Val Spearman": val_spearman
+        "Train Loss (train set)": train_losses,
+        "Validation Loss (val set)": val_losses,
+        "Validation Spearman (val set)": val_spearman
     }
 
     plot(
@@ -191,7 +203,7 @@ def main(opt):
         filename=f"Q2-RNN-results/RNN-training-plot-{config}.pdf"
     )
 
-    print("Training and testing finished.")
+    print("Training, evaluation, and plotting finished.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
