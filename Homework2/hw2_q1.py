@@ -202,7 +202,6 @@ def main(opt):
     criterion = nn.CrossEntropyLoss()
 
     # training loop
-    ### you can use the code below or implement your own loop ###
     epochs = np.arange(1, opt.epochs + 1)
     train_losses, val_accs = [], []
     best_valid = 0.0
@@ -250,7 +249,7 @@ def main(opt):
     print('Best model test acc: {:.4f}'.format(test_acc))
     print(f"Model saved to {model_path}")
 
-    config = f"{opt.learning_rate}-{opt.optimizer}-{opt.no_maxpool}-{opt.no_softmax}"
+    config = f"{opt.learning_rate}-{opt.optimizer}-{not opt.no_maxpool}-{not opt.no_softmax}"
     config_json = {
         "lr": opt.learning_rate,
         "optimizer": opt.optimizer,
