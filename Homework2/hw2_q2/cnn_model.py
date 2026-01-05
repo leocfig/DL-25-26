@@ -35,12 +35,12 @@ class CNN(nn.Module):
             self.convs.append(CNNLayer(in_ch, out_ch, kernel=kernel_size, stride=1, padding=kernel_size // 2, use_pool=use_pool, dropout=dropout))
             in_ch = out_ch
 
-        # Infer flatten size dynamically
+        # Sample tensor with batch=1 to compute the exact number of features after all conv blocks
         with torch.no_grad():
-            dummy = torch.zeros(1, *input_size)
+            sample_tensor = torch.zeros(1, *input_size)
             for conv in self.convs:
-                dummy = conv(dummy)
-            flatten_size = dummy.view(1, -1).size(1)
+                sample_tensor = conv(sample_tensor)
+            flatten_size = sample_tensor.view(1, -1).size(1)
 
         fc_sizes = [flatten_size] + fc_params + [1]  # output = 1 (regression)
         self.fcs = nn.ModuleList()

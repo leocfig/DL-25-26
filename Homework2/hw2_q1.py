@@ -48,13 +48,16 @@ class CNN(nn.Module):
             self.convs.append(CNNLayer(in_ch, out_ch, kernel=3, stride=1, padding=1, use_pool=use_pool))
             in_ch = out_ch
 
-        # Infer flatten size dynamically
-        with torch.no_grad():
-            dummy = torch.zeros(1, *input_size)
-            for conv in self.convs:
-                dummy = conv(dummy)
-            flatten_size = dummy.view(1, -1).size(1)
+        H, W = input_size[1], input_size[2]
+        if use_pool:
+            for _ in conv_params:
+                H //= 2  # MaxPool 2
+                W //= 2  # MaxPool 2
 
+        # The number of inputs for the first FC layer
+        flatten_size = conv_params[-1] * H * W
+
+        # Fully connected layers
         fc_sizes = [flatten_size] + fc_params + [n_classes]
         self.fcs = nn.ModuleList()
         for i in range(len(fc_sizes)-1):
