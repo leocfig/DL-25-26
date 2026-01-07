@@ -139,13 +139,140 @@ def evaluate(loader, model):
 
     return accuracy_score(targets, preds)
 
-
-def plot(epochs, plottable, ylabel='', name=''):
+def plot(epochs, plottables, filename=None, ylim=None):
+    """Plot the plottables over the epochs.
+    
+    Plottables is a dictionary mapping labels to lists of values.
+    """
     plt.clf()
     plt.xlabel('Epoch')
-    plt.ylabel(ylabel)
-    plt.plot(epochs, plottable)
-    plt.savefig('%s.pdf' % (name), bbox_inches='tight')
+    for label, plottable in plottables.items():
+        plt.plot(epochs, plottable, label=label)
+    plt.legend()
+    if ylim:
+        plt.ylim(ylim)
+    if filename:
+        plt.savefig(filename, bbox_inches='tight')
+
+def config_name(use_softmax, use_pool):
+    return f"{'softmax' if use_softmax else 'logits'}_{'pool' if use_pool else 'no_pool'}"
+
+def run_experiment(opt, use_softmax, use_pool, train_loader, val_loader, test_loader, n_classes):
+    """
+    Runs one CNN experiment with a specific configuration.
+
+    Returns:
+        train_losses (list)
+        val_accs (list)
+    """
+    # --------- Before Training ----------
+    total_start = time.time()
+
+    cfg = config_name(use_softmax, use_pool)
+
+    print(f"\n=== Running experiment: {cfg} ===")
+
+    # Paths
+    results_dir = "Q1-CNN-results"
+    os.makedirs(results_dir, exist_ok=True) # directory to save results to
+    model_path  = os.path.join(results_dir, f"cnn_{cfg}.pth")
+    scores_path = os.path.join(results_dir, f"scores_{cfg}.json")
+
+    # Initialize the model
+    model = CNN(
+        n_classes=n_classes,
+        use_softmax=use_softmax,
+        conv_params=[32, 64, 128],
+        fc_params=[256],
+        input_size=(3, 28, 28),
+        use_pool=use_pool
+    ).to(device)
+
+    # Get an optimizer
+    optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
+
+    optim_cls = optims[opt.optimizer]
+    optimizer = optim_cls(
+        model.parameters(), lr=opt.learning_rate, weight_decay=0
+    )
+
+    # Get a loss criterion
+    criterion = nn.CrossEntropyLoss()
+
+    # Training loop
+    epochs = np.arange(1, opt.epochs + 1)
+    train_losses, val_accs = [], []
+    best_valid = 0.0
+    best_epoch = -1
+    for ii in epochs:
+        epoch_start = time.time()
+
+        train_loss = train_epoch(train_loader, model, criterion, optimizer)
+        val_acc = evaluate(val_loader, model)
+        train_losses.append(train_loss)
+        val_accs.append(val_acc)
+
+        epoch_end = time.time()
+        epoch_time = epoch_end - epoch_start
+
+        print(
+            f"[{cfg}] Epoch {ii}/{opt.epochs} | "
+            f"Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | "
+            f"Time: {epoch_time:.2f} sec"
+        )
+
+        # save the best model checkpoint
+        if val_acc > best_valid:
+            best_valid = val_acc
+            best_epoch = ii
+            torch.save(model.state_dict(), model_path)
+
+    # --------- After Training ----------
+    total_end = time.time()
+    total_time = total_end - total_start
+
+    print(f"\n[{cfg}] Total training time: {total_time/60:.2f} minutes "
+        f"({total_time:.2f} seconds)")
+    print('Final Test acc: %.4f' % (evaluate(test_loader, model)))
+
+    # Reload best model and evaluate on test set
+    best_model = CNN(
+        n_classes=n_classes,
+        use_softmax=use_softmax,
+        conv_params=[32, 64, 128],
+        fc_params=[256],
+        input_size=(3, 28, 28),
+        use_pool=use_pool
+    ).to(device)
+
+    best_model.load_state_dict(torch.load(model_path))
+    test_acc = evaluate(test_loader, best_model)
+
+    print(
+        f"\n[{cfg}] Best epoch: {best_epoch} | "
+        f"Best val acc: {best_valid:.4f} | "
+        f"Test acc: {test_acc:.4f}"
+    )
+    print(f"Model saved to {model_path}")
+
+    # Save scores JSON
+    scores = {
+        "config": {
+            "softmax": use_softmax,
+            "maxpool": use_pool,
+            "learning_rate": opt.learning_rate,
+            "optimizer": opt.optimizer
+        },
+        "best_valid": float(best_valid),
+        "selected_epoch": int(best_epoch),
+        "test": float(test_acc),
+        "time": total_time
+    }
+
+    with open(scores_path, "w") as f:
+        json.dump(scores, f, indent=4)
+
+    return train_losses, val_accs
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -163,9 +290,6 @@ transform = transforms.Compose([
     transforms.Normalize(mean=[.5], std=[.5])
 ])
 
-# --------- Before Training ----------
-total_start = time.time()
-
 def main(opt):
     train_dataset = BloodMNIST(split='train', transform=transform, download=True, size=28)
     val_dataset   = BloodMNIST(split='val',   transform=transform, download=True, size=28)
@@ -175,100 +299,46 @@ def main(opt):
     val_loader   = DataLoader(val_dataset, batch_size=opt.batch_size, shuffle=False)
     test_loader  = DataLoader(test_dataset, batch_size=opt.batch_size, shuffle=False)
 
-    dir_name = "Q1-CNN-results"
-    os.makedirs(dir_name, exist_ok=True) # directory to save results to
-    model_path = os.path.join(dir_name, opt.save_path)
-    scores_path = os.path.join(dir_name, opt.scores)
+    experiments = [
+        {"use_softmax": False, "use_pool": False},
+        {"use_softmax": True,  "use_pool": False},
+        {"use_softmax": False, "use_pool": True},
+        {"use_softmax": True,  "use_pool": True},
+    ]
 
-    # initialize the model
-    model = CNN(
-        n_classes=n_classes,
-        use_softmax=not opt.no_softmax,
-        conv_params=[32, 64, 128],
-        fc_params=[256],
-        input_size=(3, 28, 28),
-        use_pool=not opt.no_maxpool
-    ).to(device)
+    all_train_losses = {}
+    all_val_accs = {}
 
-    # get an optimizer
-    optims = {"adam": torch.optim.Adam, "sgd": torch.optim.SGD}
+    for exp in experiments:
+        label = config_name(exp["use_softmax"], exp["use_pool"])
 
-    optim_cls = optims[opt.optimizer]
-    optimizer = optim_cls(
-        model.parameters(), lr=opt.learning_rate, weight_decay=0
+        train_losses, val_accs = run_experiment(
+            opt,
+            exp["use_softmax"],
+            exp["use_pool"],
+            train_loader,
+            val_loader,
+            test_loader,
+            n_classes
+        )
+
+        all_train_losses[label] = train_losses
+        all_val_accs[label] = val_accs
+
+    epochs = np.arange(1, opt.epochs + 1)
+
+    plot(
+        epochs,
+        all_train_losses,
+        filename="Q1-CNN-results/CNN-training-loss-all.pdf"
     )
 
-    # get a loss criterion
-    criterion = nn.CrossEntropyLoss()
-
-    # training loop
-    epochs = np.arange(1, opt.epochs + 1)
-    train_losses, val_accs = [], []
-    best_valid = 0.0
-    best_epoch = -1
-    for ii in epochs:
-        epoch_start = time.time()
-
-        train_loss = train_epoch(train_loader, model, criterion, optimizer)
-        val_acc = evaluate(val_loader, model)
-        train_losses.append(train_loss)
-        val_accs.append(val_acc)
-
-        epoch_end = time.time()
-        epoch_time = epoch_end - epoch_start
-
-        print(f"Epoch {ii}/{opt.epochs} | "
-            f"Loss: {train_loss:.4f} | Val Acc: {val_acc:.4f} | "
-            f"Time: {epoch_time:.2f} sec")
-        
-        # save the best model checkpoint
-        if val_acc > best_valid:
-            best_valid = val_acc
-            best_epoch = ii
-            torch.save(model.state_dict(), model_path)
-
-    # --------- After Training ----------
-    total_end = time.time()
-    total_time = total_end - total_start
-
-    print(f"\nTotal training time: {total_time/60:.2f} minutes "
-        f"({total_time:.2f} seconds)")
-    print('Final Test acc: %.4f' % (evaluate(test_loader, model)))
-
-    print("\nReloading best checkpoint")
-    best_model = CNN(
-        n_classes=n_classes,
-        use_softmax=not opt.no_softmax,
-        conv_params=[32, 64, 128],
-        fc_params=[256],
-        input_size=(3, 28, 28),
-        use_pool=not opt.no_maxpool
-    ).to(device)
-    best_model.load_state_dict(torch.load(model_path))
-    test_acc = evaluate(test_loader, best_model)
-    print('Best model test acc: {:.4f}'.format(test_acc))
-    print(f"Model saved to {model_path}")
-
-    config = f"{opt.learning_rate}-{opt.optimizer}-{not opt.no_maxpool}-{not opt.no_softmax}"
-    config_json = {
-        "lr": opt.learning_rate,
-        "optimizer": opt.optimizer,
-        "maxpool": not opt.no_maxpool,
-        "softmax": not opt.no_softmax
-    }
-
-    plot(epochs, train_losses, ylabel='Loss', name='Q1-CNN-results/CNN-training-loss-{}'.format(config))
-    plot(epochs, val_accs, ylabel='Accuracy', name='Q1-CNN-results/CNN-validation-accuracy-{}'.format(config))
-
-    with open(scores_path, "w") as f:
-        json.dump(
-            {"config": config_json,
-             "best_valid": float(best_valid),
-             "selected_epoch": int(best_epoch),
-             "test": float(test_acc),
-             "time": total_time},
-            f, indent=4
-        )
+    plot(
+        epochs,
+        all_val_accs,
+        filename="Q1-CNN-results/CNN-validation-accuracy-all.pdf",
+        ylim=(0, 1)
+    )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -281,10 +351,6 @@ if __name__ == '__main__':
                         help="""Learning rate for updates.""")
     parser.add_argument('-optimizer',
                         choices=['sgd', 'adam'], default='adam')
-    parser.add_argument('-save-path', default='bloodmnist_cnn.pth')
-    parser.add_argument('-scores', default="CNN-softmax-scores.json")
-    parser.add_argument('-no_maxpool', action='store_true')
-    parser.add_argument('-no_softmax', action='store_true')
 
     opt = parser.parse_args()
 
