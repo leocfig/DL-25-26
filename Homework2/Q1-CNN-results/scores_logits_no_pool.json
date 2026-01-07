@@ -1,0 +1,12 @@
+{
+    "config": {
+        "softmax": false,
+        "maxpool": false,
+        "learning_rate": 0.001,
+        "optimizer": "adam"
+    },
+    "best_valid": 0.9345794392523364,
+    "selected_epoch": 50,
+    "test": 0.9196141479099679,
+    "time": 1298.3317413330078
+}
