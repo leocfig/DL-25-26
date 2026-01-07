@@ -1,6 +1,6 @@
 # RNAcompete 
 
-This project provides a pre-built data pipeline (`utils.py`) to handle data ingestion, cleaning, and normalization for the RNAcompete dataset. This allows you to focus strictly on designing your deep learning models.
+This project provides a pre-built data pipeline (`utils_w_masking.py`) to handle data ingestion, cleaning, and normalization for the RNAcompete dataset. This allows you to focus strictly on designing your deep learning models.
 
 ## 1\. Setup
 
