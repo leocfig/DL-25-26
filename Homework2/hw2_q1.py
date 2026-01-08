@@ -6,7 +6,7 @@
 
 import json
 import os
-from hw2_q2 import utils_w_masking
+import random
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -20,6 +20,17 @@ import argparse
 import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.metrics import accuracy_score
+
+def configure_seed(seed):
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 class CNNLayer(nn.Module):
     def __init__(self, in_ch, out_ch, kernel, stride, padding, use_pool):
@@ -355,6 +366,6 @@ if __name__ == '__main__':
     opt = parser.parse_args()
 
     # Setting seed for reproducibility
-    utils_w_masking.configure_seed(seed=42)
+    configure_seed(seed=42)
 
     main(opt)
